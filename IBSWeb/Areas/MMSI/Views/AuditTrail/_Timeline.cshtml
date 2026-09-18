@@ -1,4 +1,4 @@
-@model IEnumerable<IBS.Models.AuditTrail>
+@model IEnumerable<IBS.Models.MsapAuditTrail>
 
 @if (!Model.Any())
 {
@@ -199,7 +199,7 @@ else
         _ => new DocClasses { Marker = "", Badge = "" }
     };
 
-    string getIcon(IBS.Models.AuditTrail item) {
+    string getIcon(IBS.Models.MsapAuditTrail item) {
         var activity = item.Activity.ToLower();
         
         if (activity.StartsWith("created") || activity.StartsWith("create")) return "add";

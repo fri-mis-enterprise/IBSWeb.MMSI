@@ -2,7 +2,7 @@ using IBS.Models.MSAP;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public interface ITariffRateService
     {

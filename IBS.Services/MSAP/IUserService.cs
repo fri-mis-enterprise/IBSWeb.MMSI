@@ -1,7 +1,7 @@
 using IBS.DTOs;
 using IBS.Utility.Helpers;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public interface IUserService
     {

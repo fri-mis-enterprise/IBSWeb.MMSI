@@ -4,7 +4,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class PortService(IUnitOfWork unitOfWork, ILogger<PortService> logger) : IPortService
     {
@@ -23,10 +23,10 @@ namespace IBS.Services
             try
             {
                 await unitOfWork.Port.AddAsync(model, cancellationToken);
-                
-                var auditTrail = new AuditTrail(username, $"Created new Port #{model.PortNumber}", "Port");
+
+                var auditTrail = new MsapAuditTrail(username, $"Created new Port #{model.PortNumber}", "Port");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
-                
+
                 await unitOfWork.SaveAsync(cancellationToken);
                 return ServiceResult<int>.Success(model.PortId, "Port created successfully.");
             }
@@ -51,7 +51,7 @@ namespace IBS.Services
                 existingPort.PortName = model.PortName;
                 existingPort.HasSBMA = model.HasSBMA;
 
-                var auditTrail = new AuditTrail(username, $"Updated Port #{model.PortNumber}", "Port");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Port #{model.PortNumber}", "Port");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -76,7 +76,7 @@ namespace IBS.Services
 
                 await unitOfWork.Port.RemoveAsync(port, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Port #{port.PortNumber}", "Port");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Port #{port.PortNumber}", "Port");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

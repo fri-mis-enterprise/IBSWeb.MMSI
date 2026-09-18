@@ -2,7 +2,7 @@ using IBS.Models;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Identity;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public interface IRoleService
     {

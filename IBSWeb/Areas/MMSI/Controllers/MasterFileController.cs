@@ -10,7 +10,7 @@ using OfficeOpenXml.Style;
 using System.Drawing;
 using System.Security.Claims;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     [Authorize]
@@ -56,12 +56,12 @@ namespace IBSWeb.Areas.User.Controllers
                 }
 
                 // Audit Trail
-                AuditTrail auditTrail = new(
+                MsapAuditTrail msapAuditTrail = new(
                     extractedBy,
                     $"Generate {masterFileType} master file excel",
                     $"{masterFileType}"
                 );
-                await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrail, cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return File(result.stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", result.fileName);
@@ -87,7 +87,7 @@ namespace IBSWeb.Areas.User.Controllers
             CancellationToken cancellationToken)
         {
             // Fetch customers
-            var customersEnumerable = await unitOfWork.Customer.GetAllAsync(
+            var customersEnumerable = await unitOfWork.MsapCustomer.GetAllAsync(
                 cancellationToken: cancellationToken);
 
             var customers = customersEnumerable.ToList();
@@ -169,7 +169,7 @@ namespace IBSWeb.Areas.User.Controllers
 
                    CancellationToken cancellationToken)
         {
-            var suppliers = await unitOfWork.Supplier.GetAllAsync(
+            var suppliers = await unitOfWork.MsapSupplier.GetAllAsync(
                 cancellationToken: cancellationToken);
 
             var suppliersList = suppliers.ToList();
@@ -221,7 +221,7 @@ namespace IBSWeb.Areas.User.Controllers
 
             CancellationToken cancellationToken)
         {
-            var bankAccounts = await unitOfWork.BankAccount.GetAllAsync(
+            var bankAccounts = await unitOfWork.MsapBankAccount.GetAllAsync(
                 cancellationToken: cancellationToken);
 
             var bankAccountsList = bankAccounts.ToList();

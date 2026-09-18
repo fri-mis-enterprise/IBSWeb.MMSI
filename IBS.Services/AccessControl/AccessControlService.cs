@@ -1,5 +1,6 @@
 using IBS.Models;
 using IBS.Models.Enums;
+using IBS.Services.MSAP;
 using Microsoft.AspNetCore.Identity;
 
 namespace IBS.Services.AccessControl
@@ -13,7 +14,7 @@ namespace IBS.Services.AccessControl
         Task<bool> HasAnyAccessAsync(string userId, params ProcedureEnum[] procedures);
     }
 
-    public class AccessControlService(UserManager<ApplicationUser> userManager, IUserAccessService userAccessService)
+    public class AccessControlService(UserManager<ApplicationUser> userManager, MSAP_IUserAccessService userAccessService)
         : IAccessControlService
     {
         private readonly UserManager<ApplicationUser> _userManager = userManager;

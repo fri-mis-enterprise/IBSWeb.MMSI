@@ -4,17 +4,18 @@ using System.Security.Claims;
 using IBS.DataAccess.Data;
 using IBS.DataAccess.Repository.IRepository;
 using IBS.Models;
+using IBS.Models.Filpride.Books;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     public class PaymentTermsController(
         IUnitOfWork unitOfWork,
-        ILogger<SupplierController> logger,
+        ILogger<PaymentTermsController> logger,
         UserManager<ApplicationUser> userManager,
         ApplicationDbContext dbContext)
         : Controller
@@ -133,9 +134,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region -- Audit Trail Recording --
 
-                AuditTrail auditTrailBook = new(getUserFullName,
+                FilprideAuditTrail msapAuditTrailBook = new(getUserFullName,
                     $"Create new Terms #{model.TermsCode}", "Terms");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion -- Audit Trail Recording --
 
@@ -191,9 +192,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region -- Audit Trail Recording --
 
-                AuditTrail auditTrailBook = new (getUserFullName,
+                FilprideAuditTrail msapAuditTrailBook = new (getUserFullName,
                     $"Edited Terms #{model.TermsCode}", "Terms");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion -- Audit Trail Recording --
 
@@ -240,9 +241,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region -- Audit Trail Recording --
 
-                AuditTrail auditTrailBook = new (getUserFullName,
+                MsapAuditTrail msapAuditTrailBook = new (getUserFullName,
                     $"Deleted Terms #{code}", "Terms");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion -- Audit Trail Recording --
 

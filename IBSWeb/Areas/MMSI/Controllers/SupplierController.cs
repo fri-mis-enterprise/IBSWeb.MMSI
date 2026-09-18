@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     public class SupplierController(
@@ -162,9 +162,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region -- Audit Trail Recording --
 
-                AuditTrail auditTrailBook = new(model.CreatedBy!,
+                MsapAuditTrail msapAuditTrailBook = new(model.CreatedBy!,
                     $"Create new Supplier #{model.SupplierCode}", "Supplier");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion -- Audit Trail Recording --
 
@@ -328,9 +328,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region -- Audit Trail Recording --
 
-                AuditTrail auditTrailBook = new (GetUserFullName(),
+                MsapAuditTrail msapAuditTrailBook = new (GetUserFullName(),
                     $"Edited Supplier #{model.SupplierCode}", "Supplier" );
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion -- Audit Trail Recording --
 
@@ -395,9 +395,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region --Audit Trail Recording
 
-                AuditTrail auditTrailBook = new(GetUserFullName(),
+                MsapAuditTrail msapAuditTrailBook = new(GetUserFullName(),
                     $"Activated Supplier #{supplier.SupplierCode}", "Supplier");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 
@@ -463,9 +463,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region --Audit Trail Recording
 
-                AuditTrail auditTrailBook = new (GetUserFullName(),
+                MsapAuditTrail msapAuditTrailBook = new (GetUserFullName(),
                     $"Deactivated Supplier #{supplier.SupplierCode}", "Supplier" );
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 

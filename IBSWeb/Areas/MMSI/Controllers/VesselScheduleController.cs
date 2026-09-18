@@ -9,8 +9,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Text.Json;
+using IBS.Services.MSAP;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     [Authorize]

@@ -3,15 +3,16 @@ using IBS.Models;
 using IBS.Models.Enums;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.ViewModels;
-using IBS.Services;
 using IBS.Services.AccessControl;
 using IBS.Services.Attributes;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using IBS.Services.MSAP;
 using IBS.Utility.Constants;
+using ICloudStorageService = IBS.Services.ICloudStorageService;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     /// <summary>
     /// Controller for managing Job Orders in the MMSI system.
@@ -146,7 +147,7 @@ namespace IBSWeb.Areas.User.Controllers
                 return NotFound();
             }
 
-            var billing = await unitOfWork.Billing.GetAsync(b => b.JobOrderId == id, cancellationToken);
+            var billing = await unitOfWork.MsapBilling.GetAsync(b => b.JobOrderId == id, cancellationToken);
             ViewData["HasBilling"] = billing != null;
             ViewData["BillingNumber"] = billing?.MsapBillingNumber;
 
@@ -296,7 +297,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAnyAccess("Access denied.", ProcedureEnum.CreateJobOrder, ProcedureEnum.EditJobOrder)]
         public async Task<JsonResult> SearchCustomers(string? term, CancellationToken cancellationToken)
         {
-            var result = await unitOfWork.Customer.SearchCustomersDtoAsync(term ?? string.Empty, 10, cancellationToken);
+            var result = await unitOfWork.MsapCustomer.SearchCustomersDtoAsync(term ?? string.Empty, 10, cancellationToken);
             return Json(result);
         }
 

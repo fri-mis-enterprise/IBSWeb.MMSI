@@ -7,19 +7,19 @@ using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class JobOrderService(IUnitOfWork unitOfWork, ILogger<JobOrderService> logger)
     {
         public async Task<IEnumerable<JobOrder>> GetAllJobOrdersAsync(CancellationToken cancellationToken)
         {
-            var jobOrders = await unitOfWork.JobOrder.GetAllJobOrdersWithDetailsAsync(cancellationToken);
+            var jobOrders = await unitOfWork.MsapJobOrder.GetAllJobOrdersWithDetailsAsync(cancellationToken);
             return jobOrders;
         }
 
         public async Task<JobOrder?> GetJobOrderByIdAsync(int id, CancellationToken cancellationToken)
         {
-            return await unitOfWork.JobOrder.GetJobOrderWithDetailsAsync(id, cancellationToken);
+            return await unitOfWork.MsapJobOrder.GetJobOrderWithDetailsAsync(id, cancellationToken);
         }
 
         public async Task<JobOrderViewModel> PopulateJobOrderViewModelAsync(JobOrderViewModel? viewModel, CancellationToken cancellationToken)
@@ -28,7 +28,7 @@ namespace IBS.Services
 
             viewModel.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
 
-            var vessels = await unitOfWork.Vessel.GetAllAsync(cancellationToken: cancellationToken);
+            var vessels = await unitOfWork.MsapVessel.GetAllAsync(cancellationToken: cancellationToken);
             viewModel.Vessels = vessels
                 .OrderBy(v => v.VesselName)
                 .Select(v => new SelectListItem
@@ -38,7 +38,7 @@ namespace IBS.Services
                 })
                 .ToList();
 
-            var ports = await unitOfWork.Port.GetAllAsync(cancellationToken: cancellationToken);
+            var ports = await unitOfWork.MsapPort.GetAllAsync(cancellationToken: cancellationToken);
             viewModel.Ports = ports
                 .OrderBy(p => p.PortName)
                 .Select(p => new SelectListItem
@@ -49,7 +49,7 @@ namespace IBS.Services
                 .ToList();
 
             viewModel.Terminals = viewModel.PortId != 0
-                ? (await unitOfWork.Terminal.GetAllAsync(t => t.PortId == viewModel.PortId, cancellationToken: cancellationToken))
+                ? (await unitOfWork.MsapTerminal.GetAllAsync(t => t.PortId == viewModel.PortId, cancellationToken: cancellationToken))
                     .OrderBy(t => t.TerminalName)
                     .Select(t => new SelectListItem
                     {
@@ -79,11 +79,11 @@ namespace IBS.Services
                 }
 
                 jobOrder.Status = SD.JobOrderStatus.Open;
-                jobOrder.JobOrderNumber = await unitOfWork.JobOrder.GenerateJobOrderNumber(cancellationToken);
+                jobOrder.JobOrderNumber = await unitOfWork.MsapJobOrder.GenerateJobOrderNumber(cancellationToken);
                 jobOrder.CreatedBy = username;
                 jobOrder.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                await unitOfWork.JobOrder.AddAsync(jobOrder, cancellationToken);
+                await unitOfWork.MsapJobOrder.AddAsync(jobOrder, cancellationToken);
                 await RecordAuditAsync($"Created Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
                 await unitOfWork.SaveAsync(cancellationToken);
 
@@ -100,7 +100,7 @@ namespace IBS.Services
         {
             try
             {
-                var jobOrder = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == model.JobOrderId, cancellationToken);
+                var jobOrder = await unitOfWork.MsapJobOrder.GetAsync(j => j.JobOrderId == model.JobOrderId, cancellationToken);
                 if (jobOrder == null)
                 {
                     return ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
@@ -117,7 +117,7 @@ namespace IBS.Services
                     return ServiceResult.Failure($"Job Order #{jobOrder.JobOrderNumber} is {jobOrder.Status.ToLower()} and cannot be edited.");
                 }
 
-                if (await unitOfWork.Billing.GetAsync(b => b.JobOrderId == model.JobOrderId && b.Status == SD.BillingStatus.ForPosting, cancellationToken) != null)
+                if (await unitOfWork.MsapBilling.GetAsync(b => b.JobOrderId == model.JobOrderId && b.Status == SD.BillingStatus.ForPosting, cancellationToken) != null)
                 {
                     return ServiceResult.Failure($"Job Order #{jobOrder.JobOrderNumber} has an unposted billing. Please delete the billing first before editing.");
                 }
@@ -168,7 +168,7 @@ namespace IBS.Services
                                   jobOrder.TerminalId != old.TerminalId;
 
             // 1. Update unbilled dispatch tickets
-            var tickets = await unitOfWork.DispatchTicket.GetAllAsync(
+            var tickets = await unitOfWork.MsapDispatchTicket.GetAllAsync(
                 dt => dt.JobOrderId == jobOrder.JobOrderId &&
                       dt.Status != SD.DispatchTicketStatus.Billed &&
                       dt.Status != SD.DispatchTicketStatus.Deleted &&
@@ -207,7 +207,7 @@ namespace IBS.Services
             }
 
             // 2. Update unposted/uncollected billings
-            var billings = await unitOfWork.Billing.GetAllAsync(
+            var billings = await unitOfWork.MsapBilling.GetAllAsync(
                 b => b.JobOrderId == jobOrder.JobOrderId &&
                      (b.Status == SD.BillingStatus.ForPosting || b.Status == SD.BillingStatus.ForCollection),
                 cancellationToken);
@@ -229,7 +229,7 @@ namespace IBS.Services
             try
             {
                 var closedStatuses = new[] { SD.DispatchTicketStatus.Billed, SD.DispatchTicketStatus.Deleted, SD.ServiceRequestStatus.ServiceRequestDeleted };
-                var anyUnbilled = await unitOfWork.DispatchTicket.GetAsync(
+                var anyUnbilled = await unitOfWork.MsapDispatchTicket.GetAsync(
                     dt => dt.JobOrderId == jobOrderId && !closedStatuses.Contains(dt.Status),
                     cancellationToken) != null;
 
@@ -238,7 +238,7 @@ namespace IBS.Services
                     return;
                 }
 
-                var jobOrder = await unitOfWork.JobOrder.GetAsync(jo => jo.JobOrderId == jobOrderId, cancellationToken);
+                var jobOrder = await unitOfWork.MsapJobOrder.GetAsync(jo => jo.JobOrderId == jobOrderId, cancellationToken);
                 if (jobOrder == null || jobOrder.Status == SD.JobOrderStatus.Closed)
                 {
                     return;
@@ -257,12 +257,12 @@ namespace IBS.Services
 
         public async Task<(IEnumerable<JobOrder> Data, int RecordsFiltered, int TotalRecords)> GetPagedJobOrdersAsync(DataTablesParameters parameters, CancellationToken cancellationToken)
         {
-            return await unitOfWork.JobOrder.GetPagedJobOrdersAsync(parameters, cancellationToken);
+            return await unitOfWork.MsapJobOrder.GetPagedJobOrdersAsync(parameters, cancellationToken);
         }
 
         private async Task RecordAuditAsync(string activity, string username, CancellationToken cancellationToken, int? recordId = null, string? referenceNumber = null)
         {
-            var audit = new AuditTrail(username, activity, "Job Order", recordId, referenceNumber);
+            var audit = new MsapAuditTrail(username, activity, "Job Order", recordId, referenceNumber);
             await unitOfWork.AuditTrail.AddAsync(audit, cancellationToken);
         }
 
@@ -270,7 +270,7 @@ namespace IBS.Services
         {
             try
             {
-                var jobOrder = await unitOfWork.JobOrder.GetJobOrderWithDetailsAsync(jobOrderId, cancellationToken);
+                var jobOrder = await unitOfWork.MsapJobOrder.GetJobOrderWithDetailsAsync(jobOrderId, cancellationToken);
                 if (jobOrder == null)
                 {
                     return ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
@@ -282,7 +282,7 @@ namespace IBS.Services
                     return guard;
                 }
 
-                var tugboat = await unitOfWork.Tugboat.GetAsync(t => t.TugboatId == tugboatId, cancellationToken);
+                var tugboat = await unitOfWork.MsapTugboat.GetAsync(t => t.TugboatId == tugboatId, cancellationToken);
                 if (tugboat == null)
                 {
                     return ServiceResult.Failure("Tugboat not found.", ServiceResultStatus.NotFound);
@@ -302,7 +302,7 @@ namespace IBS.Services
                 else
                 {
                     // Assign as an additional tugboat by creating a pending DispatchTicket
-                    var services = await unitOfWork.Service.GetAllAsync(cancellationToken: cancellationToken);
+                    var services = await unitOfWork.MsapService.GetAllAsync(cancellationToken: cancellationToken);
                     var service = services.FirstOrDefault();
                     if (service == null)
                     {
@@ -326,7 +326,7 @@ namespace IBS.Services
                         CreatedDate = DateTimeHelper.GetCurrentPhilippineTime()
                     };
 
-                    await unitOfWork.DispatchTicket.AddAsync(ticket, cancellationToken);
+                    await unitOfWork.MsapDispatchTicket.AddAsync(ticket, cancellationToken);
                 }
 
                 await RecordAuditAsync($"Assigned tugboat {tugboat.TugboatName} to Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
@@ -345,7 +345,7 @@ namespace IBS.Services
         {
             try
             {
-                var jobOrder = await unitOfWork.JobOrder.GetJobOrderWithDetailsAsync(jobOrderId, cancellationToken);
+                var jobOrder = await unitOfWork.MsapJobOrder.GetJobOrderWithDetailsAsync(jobOrderId, cancellationToken);
                 if (jobOrder == null)
                 {
                     return ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
@@ -357,7 +357,7 @@ namespace IBS.Services
                     return guard;
                 }
 
-                var tug = await unitOfWork.Tugboat.GetAsync(t => t.TugboatId == tugboatId, cancellationToken);
+                var tug = await unitOfWork.MsapTugboat.GetAsync(t => t.TugboatId == tugboatId, cancellationToken);
                 string? tugboatName = tug?.TugboatName;
 
                 if (jobOrder.PreferredTugboatId == tugboatId)
@@ -373,7 +373,7 @@ namespace IBS.Services
                         return ServiceResult.Failure("Cannot unassign a tugboat with an active or processed dispatch ticket.");
                     }
 
-                    await unitOfWork.DispatchTicket.RemoveAsync(ticketToRemove, cancellationToken);
+                    await unitOfWork.MsapDispatchTicket.RemoveAsync(ticketToRemove, cancellationToken);
                 }
 
                 await RecordAuditAsync($"Unassigned tugboat {tugboatName ?? "Unknown"} from Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
@@ -390,7 +390,7 @@ namespace IBS.Services
 
         public async Task<List<SelectListItem>> GetJobOrderSelectListAsync(CancellationToken cancellationToken)
         {
-            var jobOrders = await unitOfWork.JobOrder.GetAllJobOrdersWithDetailsAsync(cancellationToken);
+            var jobOrders = await unitOfWork.MsapJobOrder.GetAllJobOrdersWithDetailsAsync(cancellationToken);
             return jobOrders
                 .Take(100)
                 .Select(j => new SelectListItem

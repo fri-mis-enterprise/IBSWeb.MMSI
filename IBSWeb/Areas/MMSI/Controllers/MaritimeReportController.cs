@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     [RequireAnyAccess("Access denied. You don't have permission to view reports.", ProcedureEnum.ViewMaritimeReport)]
@@ -23,7 +23,7 @@ public class MaritimeReportController(IUnitOfWork unitOfWork) : Controller
         {
             try
             {
-                var data = await unitOfWork.Report.GetDispatchReportData(dateFrom, dateTo, ct);
+                var data = await unitOfWork.MsapReport.GetDispatchReportData(dateFrom, dateTo, ct);
                 using var pkg = new ExcelPackage();
                 var ws = pkg.Workbook.Worksheets.Add("Dispatch For Billing");
                 const int totalCols = 22;
@@ -74,7 +74,7 @@ public class MaritimeReportController(IUnitOfWork unitOfWork) : Controller
                     ws.Cells[row, 9].Value = t.Terminal.TerminalName;
                     ws.Cells[row, 10].Value = FormatDateTime(t.DateLeft, t.TimeLeft);
                     ws.Cells[row, 11].Value = FormatDateTime(t.DateArrived, t.TimeArrived);
-                    ws.Cells[row, 12].Value = Math.Round(t.TotalHours, 2);
+                    ws.Cells[row, 12].Value = Math.Round((decimal)t.TotalHours, 2);
                     ws.Cells[row, 13].Value = "Per Move";
                     ws.Cells[row, 14].Value = NullIfZero(t.DispatchRate);
                     ws.Cells[row, 15].Value = NullIfZero(t.DispatchBillingAmount);
@@ -111,7 +111,7 @@ public class MaritimeReportController(IUnitOfWork unitOfWork) : Controller
         {
             try
             {
-                var data = await unitOfWork.Report.GetDispatchReportData(dateFrom, dateTo, ct);
+                var data = await unitOfWork.MsapReport.GetDispatchReportData(dateFrom, dateTo, ct);
                 using var pkg = new ExcelPackage();
                 var ws = pkg.Workbook.Worksheets.Add("Dispatch Summary");
                 const int totalCols = 35;
@@ -201,7 +201,7 @@ public class MaritimeReportController(IUnitOfWork unitOfWork) : Controller
                     ws.Cells[row, 9].Value = t.Terminal.TerminalName;
                     ws.Cells[row, 10].Value = FormatDateTime(t.DateLeft, t.TimeLeft);
                     ws.Cells[row, 11].Value = FormatDateTime(t.DateArrived, t.TimeArrived);
-                    ws.Cells[row, 12].Value = Math.Round(t.TotalHours, 2);
+                    ws.Cells[row, 12].Value = Math.Round((decimal)t.TotalHours, 2);
                     ws.Cells[row, 13].Value = "Per Move";
                     ws.Cells[row, 14].Value = NullIfZero(t.DispatchRate);
                     ws.Cells[row, 15].Value = NullIfZero(t.DispatchBillingAmount);
@@ -271,19 +271,19 @@ public class MaritimeReportController(IUnitOfWork unitOfWork) : Controller
 
                 // TODO: Include unbilled dispatches in repository query (old system lines 150-214: !a.billed AND !EMPTY(a.custno) in same month/year).
                     // Includes billed records by billing date and qualifying unbilled records by dispatch date.
-                var data = await unitOfWork.Report.GetDispatchReportData(dateFrom, dateTo, ct, filterByBillingDate: true);
+                var data = await unitOfWork.MsapReport.GetDispatchReportData(dateFrom, dateTo, ct, filterByBillingDate: true);
 
                 // Load all masterfile entities required for dynamic columns (as in old system curtug, curowner, curcustomer)
-                var companyOwnedTugboats = (await unitOfWork.Tugboat.GetAllAsync(cancellationToken: ct))
+                var companyOwnedTugboats = (await unitOfWork.MsapTugboat.GetAllAsync(cancellationToken: ct))
                     .Where(t => t.IsCompanyOwned)
                     .OrderBy(t => t.TugboatName)
                     .ToList();
 
-                var tugboatOwners = (await unitOfWork.TugboatOwner.GetAllAsync(cancellationToken: ct))
+                var tugboatOwners = (await unitOfWork.MsapTugboatOwner.GetAllAsync(cancellationToken: ct))
                     .OrderBy(o => o.TugboatOwnerName)
                     .ToList();
 
-                var allCustomers = (await unitOfWork.Customer.GetAllAsync(cancellationToken: ct))
+                var allCustomers = (await unitOfWork.MsapCustomer.GetAllAsync(cancellationToken: ct))
                     .OrderBy(c => c.CustomerName)
                     .ToList();
 
@@ -516,7 +516,7 @@ public class MaritimeReportController(IUnitOfWork unitOfWork) : Controller
                     ws.Cells[row, 12].Value = t.Service?.ServiceName ?? "";
                     ws.Cells[row, 13].Value = FormatLegacyDateTime(t.DateLeft, t.TimeLeft);
                     ws.Cells[row, 14].Value = FormatLegacyDateTime(t.DateArrived, t.TimeArrived);
-                    ws.Cells[row, 15].Value = Math.Round(t.TotalHours, 2);
+                    ws.Cells[row, 15].Value = Math.Round((decimal)t.TotalHours, 2);
 
                     decimal grossSales = t.DispatchBillingAmount + t.BAFBillingAmount;
                     ws.Cells[row, 16].Value = grossSales;

@@ -6,7 +6,7 @@ using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class VesselScheduleService(
         IUnitOfWork unitOfWork,
@@ -25,7 +25,7 @@ namespace IBS.Services
                 model.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
                 await unitOfWork.VesselSchedule.AddAsync(model, ct);
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Created vessel schedule (Vessel #{model.VesselId}, {model.PlannedStart:MM/dd HH:mm} – {model.PlannedEnd:MM/dd HH:mm})", "Vessel Schedule", model.VesselScheduleId), ct);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Created vessel schedule (Vessel #{model.VesselId}, {model.PlannedStart:MM/dd HH:mm} – {model.PlannedEnd:MM/dd HH:mm})", "Vessel Schedule", model.VesselScheduleId), ct);
                 await unitOfWork.SaveAsync(ct);
 
                 return ServiceResult<int>.Success(model.VesselScheduleId, "Schedule created successfully.");
@@ -71,7 +71,7 @@ namespace IBS.Services
                 existing.EditedBy = username;
                 existing.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Updated vessel schedule #{model.VesselScheduleId}", "Vessel Schedule", model.VesselScheduleId), ct);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Updated vessel schedule #{model.VesselScheduleId}", "Vessel Schedule", model.VesselScheduleId), ct);
                 await unitOfWork.SaveAsync(ct);
 
                 return ServiceResult.Success("Schedule updated successfully.");
@@ -94,7 +94,7 @@ namespace IBS.Services
                 }
 
                 await unitOfWork.VesselSchedule.RemoveAsync(existing, ct);
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Deleted vessel schedule #{id}", "Vessel Schedule", id), ct);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Deleted vessel schedule #{id}", "Vessel Schedule", id), ct);
                 await unitOfWork.SaveAsync(ct);
 
                 return ServiceResult.Success("Schedule deleted successfully.");

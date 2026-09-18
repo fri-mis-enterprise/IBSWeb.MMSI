@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     [Authorize]
@@ -76,10 +76,10 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region --Audit Trail Recording
 
-                AuditTrail auditTrailBook = new (
+                MsapAuditTrail msapAuditTrailBook = new (
                     GetUserFullName(), $"Created Company {model.CompanyCode}",
                     "Company" );
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 
@@ -185,10 +185,10 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region --Audit Trail Recording
 
-                AuditTrail auditTrailBook = new (
+                MsapAuditTrail msapAuditTrailBook = new (
                     GetUserFullName(), $"Edited Company {model.CompanyCode}",
                     "Company");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 
@@ -251,10 +251,10 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region --Audit Trail Recording
 
-                AuditTrail auditTrailBook = new (
+                MsapAuditTrail msapAuditTrailBook = new (
                     GetUserFullName(), $"Activated Company {company.CompanyCode}",
                     "Company" );
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 
@@ -318,10 +318,10 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region --Audit Trail Recording
 
-                AuditTrail auditTrailBook = new (
+                MsapAuditTrail msapAuditTrailBook = new (
                     GetUserFullName(), $"Deactivated Company {company.CompanyCode}",
                     "Company");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 

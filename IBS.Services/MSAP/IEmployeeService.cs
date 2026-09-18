@@ -2,7 +2,7 @@ using IBS.Models.MasterFile;
 using IBS.Utility.Helpers;
 using IBS.Models;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public interface IEmployeeService
     {

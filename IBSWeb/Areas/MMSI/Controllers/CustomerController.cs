@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using OfficeOpenXml;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     public class CustomerController(
@@ -108,9 +108,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region -- Audit Trail Recording
 
-                AuditTrail auditTrailBook = new(model.CreatedBy!,
+                MsapAuditTrail msapAuditTrailBook = new(model.CreatedBy!,
                     $"Created new Customer #{model.CustomerCode}", "Customer");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion -- Audit Trail Recording --
 
@@ -170,9 +170,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region --Audit Trail Recording
 
-                AuditTrail auditTrailBook = new (model.EditedBy,
+                MsapAuditTrail msapAuditTrailBook = new (model.EditedBy,
                     $"Edited Customer #{model.CustomerCode}", "Customer" );
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 
@@ -299,10 +299,10 @@ namespace IBSWeb.Areas.User.Controllers
                 #region --Audit Trail Recording
 
                 var user = GetUserFullName();
-                AuditTrail auditTrailBook = new(
+                MsapAuditTrail msapAuditTrailBook = new(
                     user, $"Activated Customer #{customer.CustomerCode}",
                     "Customer");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion --Audit Trail Recording
 
@@ -372,9 +372,9 @@ namespace IBSWeb.Areas.User.Controllers
 
                 #region -- Audit Trail Recording --
 
-                AuditTrail auditTrailBook = new(GetUserFullName(),
+                MsapAuditTrail msapAuditTrailBook = new(GetUserFullName(),
                     $"Deactivated Customer #{customer.CustomerCode}", "Customer");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
                 #endregion -- Audit Trail Recording --
 

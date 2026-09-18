@@ -1,33 +1,33 @@
 using IBS.DataAccess.Repository.IRepository;
 using IBS.Models;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class AuditTrailService(IUnitOfWork unitOfWork) : IAuditTrailService
     {
-        public async Task<IEnumerable<AuditTrail>> GetAuditTrailsByEntityAsync(string documentType, int recordId, CancellationToken cancellationToken)
+        public async Task<IEnumerable<MsapAuditTrail>> GetAuditTrailsByEntityAsync(string documentType, int recordId, CancellationToken cancellationToken)
         {
             return await unitOfWork.AuditTrail.GetAllAsync(
                 a => a.DocumentType == documentType && a.RecordId == recordId,
                 cancellationToken);
         }
 
-        public async Task<IEnumerable<AuditTrail>> GetJobOrderTimelineAsync(int jobOrderId, CancellationToken cancellationToken)
+        public async Task<IEnumerable<MsapAuditTrail>> GetJobOrderTimelineAsync(int jobOrderId, CancellationToken cancellationToken)
         {
-            var jobOrder = await unitOfWork.JobOrder.GetAsync(jo => jo.JobOrderId == jobOrderId, cancellationToken);
+            var jobOrder = await unitOfWork.MsapJobOrder.GetAsync(jo => jo.JobOrderId == jobOrderId, cancellationToken);
             if (jobOrder == null)
             {
-                return Enumerable.Empty<AuditTrail>();
+                return Enumerable.Empty<MsapAuditTrail>();
             }
 
             var joNumber = jobOrder.JobOrderNumber;
 
             // 1. Identify all related document identifiers
-            var dispatchTickets = await unitOfWork.DispatchTicket.GetAllAsync(dt => dt.JobOrderId == jobOrderId, cancellationToken);
+            var dispatchTickets = await unitOfWork.MsapDispatchTicket.GetAllAsync(dt => dt.JobOrderId == jobOrderId, cancellationToken);
             var dtIds = dispatchTickets.Select(dt => dt.DispatchTicketId).ToList();
             var dtNumbers = dispatchTickets.Select(dt => dt.DispatchNumber).Where(n => !string.IsNullOrEmpty(n)).ToList();
 
-            var billings = await unitOfWork.Billing.GetAllAsync(b => b.JobOrderId == jobOrderId, cancellationToken);
+            var billings = await unitOfWork.MsapBilling.GetAllAsync(b => b.JobOrderId == jobOrderId, cancellationToken);
             var billingIds = billings.Select(b => b.MsapBillingId).ToList();
             var billingNumbers = billings.Select(b => b.MsapBillingNumber).Where(n => !string.IsNullOrEmpty(n)).ToList();
 
@@ -35,7 +35,7 @@ namespace IBS.Services
             var collectionNumbers = billings.Where(b => !string.IsNullOrEmpty(b.CollectionNumber)).Select(b => b.CollectionNumber!).Distinct().ToList();
 
             // 2. Fetch related audits in segmented batches to avoid massive SQL OR chains that can timeout
-            var allAudits = new List<AuditTrail>();
+            var allAudits = new List<MsapAuditTrail>();
 
             // Job Order Audits
             allAudits.AddRange(await unitOfWork.AuditTrail.GetAllAsync(a =>
@@ -77,7 +77,7 @@ namespace IBS.Services
                 .ToList();
         }
 
-        public async Task<(IEnumerable<AuditTrail> Data, int RecordsFiltered, int TotalRecords)> GetPagedAuditTrailsAsync(DataTablesParameters parameters, CancellationToken cancellationToken)
+        public async Task<(IEnumerable<MsapAuditTrail> Data, int RecordsFiltered, int TotalRecords)> GetPagedAuditTrailsAsync(DataTablesParameters parameters, CancellationToken cancellationToken)
         {
             return await unitOfWork.AuditTrail.GetPagedAuditTrailsAsync(parameters, cancellationToken);
         }

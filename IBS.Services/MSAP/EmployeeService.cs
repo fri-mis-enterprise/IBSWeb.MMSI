@@ -4,7 +4,7 @@ using IBS.Models.MasterFile;
 using IBS.Utility.Helpers;
 using System.Linq.Dynamic.Core;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class EmployeeService(
         IUnitOfWork unitOfWork)
@@ -29,8 +29,8 @@ namespace IBS.Services
                     model.Company = companyClaims;
                     await unitOfWork.Employee.AddAsync(model, cancellationToken);
 
-                    AuditTrail auditTrail = new(username, $"Created new Employee #{model.EmployeeNumber}", "Employee");
-                    await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
+                    MsapAuditTrail msapAuditTrail = new(username, $"Created new Employee #{model.EmployeeNumber}", "Employee");
+                    await unitOfWork.AuditTrail.AddAsync(msapAuditTrail, cancellationToken);
 
                     await unitOfWork.SaveAsync(cancellationToken);
                 }, cancellationToken);
@@ -89,8 +89,8 @@ namespace IBS.Services
             {
                 if (changes.Any())
                 {
-                    AuditTrail auditTrail = new(username, $"Edited Employee #{existingModel.EmployeeNumber}: {string.Join("; ", changes)}", "Employee");
-                    await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
+                    MsapAuditTrail msapAuditTrail = new(username, $"Edited Employee #{existingModel.EmployeeNumber}: {string.Join("; ", changes)}", "Employee");
+                    await unitOfWork.AuditTrail.AddAsync(msapAuditTrail, cancellationToken);
                 }
 
                 existingModel.EmployeeNumber = model.EmployeeNumber;

@@ -5,10 +5,13 @@ using IBS.DataAccess.Repository.Filpride;
 using IBS.DataAccess.Repository.IRepository;
 using IBS.DataAccess.Repository.MasterFile.IRepository;
 using IBS.DataAccess.Repository.MasterFile;
+using IBS.DataAccess.Repository.Msap.IRepository;
 using IBS.Models.Enums;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using IProductRepository = IBS.DataAccess.Repository.MasterFile.IRepository.IProductRepository;
+using IReportRepository = IBS.DataAccess.Repository.Filpride.IRepository.IReportRepository;
+using IServiceRepository = IBS.DataAccess.Repository.Filpride.IRepository.IServiceRepository;
 using ProductRepository = IBS.DataAccess.Repository.MasterFile.ProductRepository;
 
 namespace IBS.DataAccess.Repository
@@ -70,6 +73,76 @@ namespace IBS.DataAccess.Repository
                     cancellationToken);
         }
 
+        public IAuditTrailRepository AuditTrail { get; }
+        public Task<List<SelectListItem>> GetCustomerListAsyncById(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetSupplierListAsyncById(string company, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetTradeSupplierListAsyncById(string company, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetNonTradeSupplierListAsyncById(string company, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetCommissioneeListAsyncById(string company, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetHaulerListAsyncById(string company, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetBankAccountListById(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetEmployeeListById(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetCashierListAsyncByUsernameAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<List<SelectListItem>> GetCashierListAsyncByStationAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IMsapRepository Msap { get; }
+        public IServiceRequestRepository MsapServiceRequest { get; }
+        public IJobOrderRepository MsapJobOrder { get; }
+        public IDispatchTicketRepository MsapDispatchTicket { get; }
+        public IBillingRepository MsapBilling { get; }
+        public ICollectionRepository MsapCollection { get; }
+        public IReportRepository MsapReport { get; }
+        public IServiceRepository MsapService { get; }
+        public ITariffTableRepository TariffTable { get; }
+        public IPortRepository Port { get; }
+        public IPrincipalRepository Principal { get; }
+        public ITerminalRepository Terminal { get; }
+        public ITugboatRepository Tugboat { get; }
+        public ITugMasterRepository TugMaster { get; }
+        public ITugboatOwnerRepository TugboatOwner { get; }
+        public IUserAccessRepository UserAccess { get; }
+        public IVesselRepository Vessel { get; }
+        public IVesselScheduleRepository VesselSchedule { get; }
+
         #region--Filpride
 
         public ICustomerOrderSlipRepository FilprideCustomerOrderSlip { get; private set; }
@@ -128,9 +201,28 @@ namespace IBS.DataAccess.Repository
 
         #endregion
 
-        public UnitOfWork(ApplicationDbContext db)
+        public UnitOfWork(ApplicationDbContext db, IAuditTrailRepository msapAuditTrail, IMsapRepository msap, IServiceRequestRepository serviceRequest, IJobOrderRepository jobOrder, IDispatchTicketRepository dispatchTicket, IBillingRepository billing, ICollectionRepository collection, IReportRepository report, IServiceRepository service, ITariffTableRepository tariffTable, IPortRepository port, IPrincipalRepository principal, ITerminalRepository terminal, ITugboatRepository tugboat, ITugMasterRepository tugMaster, ITugboatOwnerRepository tugboatOwner, IUserAccessRepository userAccess, IVesselRepository vessel, IVesselScheduleRepository vesselSchedule)
         {
             _db = db;
+            AuditTrail = msapAuditTrail;
+            Msap = msap;
+            MsapServiceRequest = serviceRequest;
+            MsapJobOrder = jobOrder;
+            MsapDispatchTicket = dispatchTicket;
+            MsapBilling = billing;
+            MsapCollection = collection;
+            MsapReport = report;
+            MsapService = service;
+            TariffTable = tariffTable;
+            Port = port;
+            Principal = principal;
+            Terminal = terminal;
+            Tugboat = tugboat;
+            TugMaster = tugMaster;
+            TugboatOwner = tugboatOwner;
+            UserAccess = userAccess;
+            Vessel = vessel;
+            VesselSchedule = vesselSchedule;
 
             Product = new ProductRepository(_db);
             Company = new CompanyRepository(_db);

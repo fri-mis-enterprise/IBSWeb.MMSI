@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class DispatchTicketService(
         IUnitOfWork unitOfWork,
@@ -17,7 +17,7 @@ namespace IBS.Services
     {
         public async Task<DispatchTicket?> GetDispatchTicketByIdAsync(int id, CancellationToken cancellationToken)
         {
-            return await unitOfWork.DispatchTicket.GetDispatchTicketWithDetailsAsync(id, cancellationToken);
+            return await unitOfWork.MsapDispatchTicket.GetDispatchTicketWithDetailsAsync(id, cancellationToken);
         }
 
         public async Task<ServiceRequestViewModel> PopulateDispatchTicketViewModelAsync(ServiceRequestViewModel? viewModel, int? jobOrderId, CancellationToken cancellationToken)
@@ -26,7 +26,7 @@ namespace IBS.Services
 
             if (jobOrderId.HasValue)
             {
-                var jobOrder = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == jobOrderId.Value, cancellationToken);
+                var jobOrder = await unitOfWork.MsapJobOrder.GetAsync(j => j.JobOrderId == jobOrderId.Value, cancellationToken);
                 if (jobOrder != null)
                 {
                     viewModel.JobOrderId = jobOrderId;
@@ -40,7 +40,7 @@ namespace IBS.Services
                 }
             }
 
-            viewModel = await unitOfWork.ServiceRequest.GetDispatchTicketSelectLists(viewModel, cancellationToken);
+            viewModel = await unitOfWork.MsapServiceRequest.GetDispatchTicketSelectLists(viewModel, cancellationToken);
             viewModel.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
 
             return viewModel;
@@ -60,7 +60,7 @@ namespace IBS.Services
                     return ServiceResult<int>.Failure("Cannot add ticket Ã¢â‚¬â€ parent Job Order is cancelled or closed.");
                 }
 
-                if (viewModel.JobOrderId.HasValue && await unitOfWork.DispatchTicket.GetAsync(dt => dt.JobOrderId == viewModel.JobOrderId && dt.Status == SD.DispatchTicketStatus.Billed, cancellationToken) != null)
+                if (viewModel.JobOrderId.HasValue && await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.JobOrderId == viewModel.JobOrderId && dt.Status == SD.DispatchTicketStatus.Billed, cancellationToken) != null)
                 {
                     return ServiceResult<int>.Failure("Cannot add ticket â€” Job Order already has billed tickets.");
                 }
@@ -89,7 +89,7 @@ namespace IBS.Services
                 // Logic from Repository.AddAsync
                 if (model.JobOrderId.HasValue)
                 {
-                    var jobOrder = await unitOfWork.JobOrder.GetJobOrderWithDetailsAsync(model.JobOrderId.Value, cancellationToken);
+                    var jobOrder = await unitOfWork.MsapJobOrder.GetJobOrderWithDetailsAsync(model.JobOrderId.Value, cancellationToken);
                     if (jobOrder != null)
                     {
                         model.CustomerId = jobOrder.CustomerId;
@@ -127,8 +127,8 @@ namespace IBS.Services
                     model.Status = SD.DispatchTicketStatus.ForTariff;
                 }
 
-                await unitOfWork.DispatchTicket.AddAsync(model, cancellationToken);
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Create dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                await unitOfWork.MsapDispatchTicket.AddAsync(model, cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Create dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult<int>.Success(model.DispatchTicketId, $"Dispatch Ticket #{model.DispatchNumber} was successfully created.");
@@ -149,7 +149,7 @@ namespace IBS.Services
                     return ServiceResult.Failure("Cannot edit ticket â€” parent Job Order is cancelled or closed.");
                 }
 
-                var currentModel = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == viewModel.DispatchTicketId, cancellationToken);
+                var currentModel = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == viewModel.DispatchTicketId, cancellationToken);
                 if (currentModel == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -161,7 +161,7 @@ namespace IBS.Services
                     return guard;
                 }
 
-                if (currentModel.JobOrderId.HasValue && await unitOfWork.DispatchTicket.GetAsync(dt => dt.JobOrderId == currentModel.JobOrderId && dt.Status == SD.DispatchTicketStatus.Billed, cancellationToken) != null)
+                if (currentModel.JobOrderId.HasValue && await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.JobOrderId == currentModel.JobOrderId && dt.Status == SD.DispatchTicketStatus.Billed, cancellationToken) != null)
                 {
                     return ServiceResult.Failure("Cannot edit ticket â€” Job Order already has billed tickets.");
                 }
@@ -294,7 +294,7 @@ namespace IBS.Services
                     ? $"Edit dispatch ticket #{currentModel.DispatchNumber}, {string.Join(", ", changes)}"
                     : $"No changes detected for #{currentModel.DispatchNumber}";
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, auditMessage, "Dispatch Ticket", currentModel.DispatchTicketId, currentModel.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, auditMessage, "Dispatch Ticket", currentModel.DispatchTicketId, currentModel.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success("Entry edited successfully!");
@@ -315,7 +315,7 @@ namespace IBS.Services
                     return ServiceResult.Failure("Cannot set/edit tariff â€” parent Job Order is cancelled or closed.");
                 }
 
-                var currentModel = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == model.DispatchTicketId, cancellationToken);
+                var currentModel = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == model.DispatchTicketId, cancellationToken);
                 if (currentModel == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -413,7 +413,7 @@ namespace IBS.Services
                 currentModel.TotalBilling = Math.Round(dispatchBilling + bafBilling, 2);
                 currentModel.TotalNetRevenue = Math.Round(dispatchRevenue + bafRevenue, 2);
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, auditMessage, documentType, currentModel.DispatchTicketId, currentModel.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, auditMessage, documentType, currentModel.DispatchTicketId, currentModel.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success(isEdit ? "Tariff updated successfully." : "Tariff set successfully.");
@@ -434,7 +434,7 @@ namespace IBS.Services
                     return ServiceResult.Failure("Cannot approve tariff â€” parent Job Order is cancelled or closed.");
                 }
 
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -450,7 +450,7 @@ namespace IBS.Services
                 model.EditedBy = username;
                 model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Approved tariff for dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Approved tariff for dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success("Tariff approved successfully.");
@@ -476,7 +476,7 @@ namespace IBS.Services
                     return ServiceResult.Failure("Please provide a detailed reason (at least 10 characters)");
                 }
 
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -495,7 +495,7 @@ namespace IBS.Services
                     ? $"Disapproved: {reason}"
                     : $"{model.Remarks} | Disapproved: {reason}";
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Disapproved tariff for dispatch ticket #{model.DispatchNumber}. Reason: {reason}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Disapproved tariff for dispatch ticket #{model.DispatchNumber}. Reason: {reason}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success("Tariff disapproved successfully.");
@@ -513,7 +513,7 @@ namespace IBS.Services
         {
             try
             {
-                var tickets = (await unitOfWork.DispatchTicket.GetAllAsync(
+                var tickets = (await unitOfWork.MsapDispatchTicket.GetAllAsync(
                     dt => ids.Contains(dt.DispatchTicketId), cancellationToken)).ToList();
 
                 foreach (var ticket in tickets)
@@ -540,14 +540,14 @@ namespace IBS.Services
                         ticket.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
                         await unitOfWork.AuditTrail.AddAsync(
-                            new AuditTrail(username, $"Batch approved tariff for dispatch ticket #{ticket.DispatchNumber}", "Dispatch Ticket", ticket.DispatchTicketId, ticket.DispatchNumber),
+                            new MsapAuditTrail(username, $"Batch approved tariff for dispatch ticket #{ticket.DispatchNumber}", "Dispatch Ticket", ticket.DispatchTicketId, ticket.DispatchNumber),
                             cancellationToken);
                     }
 
                     foreach (var skipped in tickets.Where(t => t.Status != SD.DispatchTicketStatus.ForApproval))
                     {
                         await unitOfWork.AuditTrail.AddAsync(
-                            new AuditTrail(username, $"Batch approve skipped for #{skipped.DispatchNumber} — current status is '{skipped.Status}'", "Dispatch Ticket", skipped.DispatchTicketId, skipped.DispatchNumber),
+                            new MsapAuditTrail(username, $"Batch approve skipped for #{skipped.DispatchNumber} — current status is '{skipped.Status}'", "Dispatch Ticket", skipped.DispatchTicketId, skipped.DispatchNumber),
                             cancellationToken);
                     }
 
@@ -574,7 +574,7 @@ namespace IBS.Services
         {
             try
             {
-                var tickets = (await unitOfWork.DispatchTicket.GetAllAsync(
+                var tickets = (await unitOfWork.MsapDispatchTicket.GetAllAsync(
                     dt => ids.Contains(dt.DispatchTicketId), cancellationToken)).ToList();
 
                 foreach (var ticket in tickets)
@@ -627,14 +627,14 @@ namespace IBS.Services
                         ticket.TariffDate = now;
 
                         await unitOfWork.AuditTrail.AddAsync(
-                            new AuditTrail(username, $"Batch set tariff for #{ticket.DispatchNumber}: Dispatch={dispatchRate:N2}, BAF={bafRate:N2}, Total={ticket.TotalBilling:N2}", "Tariff", ticket.DispatchTicketId, ticket.DispatchNumber),
+                            new MsapAuditTrail(username, $"Batch set tariff for #{ticket.DispatchNumber}: Dispatch={dispatchRate:N2}, BAF={bafRate:N2}, Total={ticket.TotalBilling:N2}", "Tariff", ticket.DispatchTicketId, ticket.DispatchNumber),
                             cancellationToken);
                     }
 
                     foreach (var skipped in tickets.Where(t => t.Status is not SD.DispatchTicketStatus.ForTariff))
                     {
                         await unitOfWork.AuditTrail.AddAsync(
-                            new AuditTrail(username, $"Batch tariff skipped for #{skipped.DispatchNumber} — status is '{skipped.Status}'", "Tariff", skipped.DispatchTicketId, skipped.DispatchNumber),
+                            new MsapAuditTrail(username, $"Batch tariff skipped for #{skipped.DispatchNumber} — status is '{skipped.Status}'", "Tariff", skipped.DispatchTicketId, skipped.DispatchNumber),
                             cancellationToken);
                     }
 
@@ -668,7 +668,7 @@ namespace IBS.Services
                     return ServiceResult.Failure("Cannot delete ticket — parent Job Order is closed or cancelled.");
                 }
 
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -690,7 +690,7 @@ namespace IBS.Services
                 model.EditedBy = username;
                 model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Deleted dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Deleted dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success($"Dispatch Ticket #{model.DispatchNumber} deleted successfully.");
@@ -711,7 +711,7 @@ namespace IBS.Services
                     return ServiceResult.Failure("Cannot restore ticket — parent Job Order is closed or cancelled.");
                 }
 
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -733,7 +733,7 @@ namespace IBS.Services
                 model.EditedBy = username;
                 model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Restored dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Restored dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success($"Dispatch Ticket #{model.DispatchNumber} restored successfully.");
@@ -749,7 +749,7 @@ namespace IBS.Services
         {
             try
             {
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -768,7 +768,7 @@ namespace IBS.Services
 
                 model.ImageName = null;
                 model.ImageSavedUrl = null;
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Deleted image on dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Deleted image on dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success("Image Deleted Successfully!");
@@ -784,7 +784,7 @@ namespace IBS.Services
         {
             try
             {
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return ServiceResult.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -803,7 +803,7 @@ namespace IBS.Services
 
                 model.VideoName = null;
                 model.VideoSavedUrl = null;
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Deleted video on dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(username, $"Deleted video on dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
                 await unitOfWork.SaveAsync(cancellationToken);
 
                 return ServiceResult.Success("Video Deleted Successfully!");
@@ -817,12 +817,12 @@ namespace IBS.Services
 
         public async Task<(IEnumerable<DispatchTicket> Data, int RecordsFiltered, int TotalRecords)> GetPagedDispatchTicketsAsync(DataTablesParameters parameters, string filterType, CancellationToken cancellationToken)
         {
-            return await unitOfWork.DispatchTicket.GetPagedDispatchTicketsAsync(parameters, filterType, cancellationToken);
+            return await unitOfWork.MsapDispatchTicket.GetPagedDispatchTicketsAsync(parameters, filterType, cancellationToken);
         }
 
         public async Task<ServiceResult<object>> CheckForTariffRateAsync(int customerId, int dispatchTicketId, CancellationToken cancellationToken)
         {
-            var dispatchModel = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == dispatchTicketId, cancellationToken);
+            var dispatchModel = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == dispatchTicketId, cancellationToken);
             if (dispatchModel == null)
             {
                 return ServiceResult<object>.Failure("Ticket not found.", ServiceResultStatus.NotFound);
@@ -864,12 +864,12 @@ namespace IBS.Services
 
         public async Task<bool> IsJobOrderEditableAsync(int? jobOrderId, CancellationToken cancellationToken)
         {
-            return await unitOfWork.DispatchTicket.IsJobOrderEditableAsync(jobOrderId, cancellationToken);
+            return await unitOfWork.MsapDispatchTicket.IsJobOrderEditableAsync(jobOrderId, cancellationToken);
         }
 
         private async Task<bool> IsTicketJobOrderEditableAsync(int dispatchTicketId, CancellationToken cancellationToken)
         {
-            var ticket = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == dispatchTicketId, cancellationToken);
+            var ticket = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == dispatchTicketId, cancellationToken);
             return ticket != null && await IsJobOrderEditableAsync(ticket.JobOrderId, cancellationToken);
         }
 
@@ -890,7 +890,7 @@ namespace IBS.Services
 
         public async Task<ServiceRequestViewModel> PopulateSelectListsAsync(ServiceRequestViewModel viewModel, CancellationToken cancellationToken)
         {
-            viewModel = await unitOfWork.ServiceRequest.GetDispatchTicketSelectLists(viewModel, cancellationToken);
+            viewModel = await unitOfWork.MsapServiceRequest.GetDispatchTicketSelectLists(viewModel, cancellationToken);
             viewModel.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
             return viewModel;
         }
@@ -898,13 +898,13 @@ namespace IBS.Services
         public async Task<IEnumerable<DispatchTicket>> GetDispatchTicketsByFilterAsync(string status, CancellationToken cancellationToken)
         {
             return status == "All"
-                ? await unitOfWork.DispatchTicket.GetAllAsync(dt => dt.Status != "For Posting", cancellationToken)
-                : await unitOfWork.DispatchTicket.GetAllAsync(dt => dt.Status == status, cancellationToken);
+                ? await unitOfWork.MsapDispatchTicket.GetAllAsync(dt => dt.Status != "For Posting", cancellationToken)
+                : await unitOfWork.MsapDispatchTicket.GetAllAsync(dt => dt.Status == status, cancellationToken);
         }
 
         public async Task<object?> GetTicketDetailsAsync(int id, CancellationToken cancellationToken)
         {
-            var ticket = await unitOfWork.DispatchTicket.GetDispatchTicketWithDetailsAsync(id, cancellationToken);
+            var ticket = await unitOfWork.MsapDispatchTicket.GetDispatchTicketWithDetailsAsync(id, cancellationToken);
             if (ticket == null)
             {
                 return null;

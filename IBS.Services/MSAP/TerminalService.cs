@@ -4,7 +4,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class TerminalService(IUnitOfWork unitOfWork, ILogger<TerminalService> logger) : ITerminalService
     {
@@ -30,10 +30,10 @@ namespace IBS.Services
             try
             {
                 await unitOfWork.Terminal.AddAsync(model, cancellationToken);
-                
-                var auditTrail = new AuditTrail(username, $"Created new Terminal #{model.TerminalNumber}", "Terminal");
+
+                var auditTrail = new MsapAuditTrail(username, $"Created new Terminal #{model.TerminalNumber}", "Terminal");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
-                
+
                 await unitOfWork.SaveAsync(cancellationToken);
                 return ServiceResult<int>.Success(model.TerminalId, "Terminal created successfully.");
             }
@@ -58,7 +58,7 @@ namespace IBS.Services
                 existingTerminal.TerminalName = model.TerminalName;
                 existingTerminal.PortId = model.PortId;
 
-                var auditTrail = new AuditTrail(username, $"Updated Terminal #{model.TerminalNumber}", "Terminal");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Terminal #{model.TerminalNumber}", "Terminal");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -83,7 +83,7 @@ namespace IBS.Services
 
                 await unitOfWork.Terminal.RemoveAsync(terminal, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Terminal #{terminal.TerminalNumber}", "Terminal");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Terminal #{terminal.TerminalNumber}", "Terminal");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

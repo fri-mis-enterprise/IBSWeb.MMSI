@@ -6,7 +6,7 @@ using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class UserAccessService(
         IUnitOfWork unitOfWork,
@@ -94,8 +94,8 @@ namespace IBS.Services
                     await unitOfWork.UserAccess.AddAsync(model, cancellationToken);
                     await unitOfWork.SaveAsync(cancellationToken);
 
-                    AuditTrail auditTrail = new(username, $"Created User Access for {model.UserName}", "User Access", model.Id);
-                    await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
+                    MsapAuditTrail msapAuditTrail = new(username, $"Created User Access for {model.UserName}", "User Access", model.Id);
+                    await unitOfWork.AuditTrail.AddAsync(msapAuditTrail, cancellationToken);
 
                     await unitOfWork.SaveAsync(cancellationToken);
                 }, cancellationToken);
@@ -148,8 +148,8 @@ namespace IBS.Services
                 {
                     if (changes.Any())
                     {
-                        AuditTrail auditTrail = new(username, $"Edited User Access for {existing.UserName}: {string.Join("; ", changes)}", "User Access", existing.Id);
-                        await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
+                        MsapAuditTrail msapAuditTrail = new(username, $"Edited User Access for {existing.UserName}: {string.Join("; ", changes)}", "User Access", existing.Id);
+                        await unitOfWork.AuditTrail.AddAsync(msapAuditTrail, cancellationToken);
                     }
 
                     existing.CanCreateServiceRequest = model.CanCreateServiceRequest;

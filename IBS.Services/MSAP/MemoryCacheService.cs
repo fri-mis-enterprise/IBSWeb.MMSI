@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public interface ICacheService
     {

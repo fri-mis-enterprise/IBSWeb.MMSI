@@ -1,7 +1,7 @@
 using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public interface ITerminalService
     {

@@ -1,7 +1,7 @@
 using IBS.Models.MSAP;
 using IBS.Utility.Helpers;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public interface IVesselScheduleService
     {

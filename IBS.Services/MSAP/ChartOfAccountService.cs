@@ -5,7 +5,7 @@ using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 using OfficeOpenXml;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class ChartOfAccountService(
         IUnitOfWork unitOfWork,
@@ -102,8 +102,8 @@ namespace IBS.Services
                 {
                     await unitOfWork.ChartOfAccount.AddAsync(newAccount, cancellationToken);
 
-                    AuditTrail auditTrail = new(createdBy, $"Created new Account #{newAccount.AccountNumber}", "Chart of Accounts");
-                    await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
+                    MsapAuditTrail msapAuditTrail = new(createdBy, $"Created new Account #{newAccount.AccountNumber}", "Chart of Accounts");
+                    await unitOfWork.AuditTrail.AddAsync(msapAuditTrail, cancellationToken);
 
                     await unitOfWork.SaveAsync(cancellationToken);
                 }, cancellationToken);
@@ -134,8 +134,8 @@ namespace IBS.Services
                     existingAccount.EditedBy = editedBy;
                     existingAccount.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                    AuditTrail auditTrail = new(editedBy, $"Edited Account #{existingAccount.AccountNumber}", "Chart of Accounts");
-                    await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
+                    MsapAuditTrail msapAuditTrail = new(editedBy, $"Edited Account #{existingAccount.AccountNumber}", "Chart of Accounts");
+                    await unitOfWork.AuditTrail.AddAsync(msapAuditTrail, cancellationToken);
 
                     await unitOfWork.SaveAsync(cancellationToken);
                 }, cancellationToken);

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class UserService(
         UserManager<ApplicationUser> userManager,
@@ -236,7 +236,7 @@ namespace IBS.Services
 
         private async Task RecordAuditAsync(string username, string activity, CancellationToken cancellationToken)
         {
-            var audit = new AuditTrail(username, activity, "User Management");
+            var audit = new MsapAuditTrail(username, activity, "User Management");
             await unitOfWork.AuditTrail.AddAsync(audit, cancellationToken);
             await unitOfWork.SaveAsync(cancellationToken);
         }

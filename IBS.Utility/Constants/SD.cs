@@ -2,6 +2,9 @@ namespace IBS.Utility.Constants
 {
     public static class SD
     {
+        public const string Company_Filpride = "Filpride";
+        public const string Company_MMSI = "MMSI";
+
         #region Terms
 
         public const string Terms_Cod = "COD";
@@ -88,5 +91,66 @@ namespace IBS.Utility.Constants
         public const string Date_Format = "MMM dd, yyyy";
 
         #endregion Format string
+
+        public static class JobOrderStatus
+        {
+            public const string Open = "Open";
+            public const string Closed = "Closed";
+        }
+
+        public static class ServiceRequestStatus
+        {
+            public const string Draft = "Draft";
+            public const string Requested = "Requested";
+            public const string ServiceRequestDeleted = "Service Request Deleted";
+
+            public static readonly string[] All = [Draft, Requested, ServiceRequestDeleted];
+        }
+
+        public static class DispatchTicketStatus
+        {
+            public const string ForTariff = "For Tariff";
+            public const string ForApproval = "For Approval";
+            public const string Disapproved = "Disapproved";
+            public const string ForBilling = "For Billing";
+            public const string Billed = "Billed";
+            public const string Deleted = "Deleted";
+
+            public static readonly string[] All = [ForTariff, ForApproval, Disapproved, ForBilling, Billed, Deleted];
+        }
+
+        public static class BillingStatus
+        {
+            public const string ForPosting = "For Posting";
+            public const string ForCollection = "For Collection";
+            public const string Collected = "Collected";
+        }
+
+        public static class VesselScheduleStatus
+        {
+            public const string Tentative = "Tentative";
+            public const string Confirmed = "Confirmed";
+            public const string InProgress = "In Progress";
+            public const string Completed = "Completed";
+            public const string Cancelled = "Cancelled";
+        }
+
+        public const string BilledToLocal = "LOCAL";
+        public const string BilledToForeign = "FOREIGN";
+
+        #region MSAP Accounting Accounts
+
+        public static class MsapAccounts
+        {
+            public const string CashInBank = "101010100";
+            public const string ArTrade = "101020100";
+            public const string ArTradeCwt = "101020200";
+            public const string ArTradeCwv = "101020300";
+            public const string Cwt = "101060400";
+            public const string Cwv = "101060600";
+            public const string OutputVat = "201030100";
+            public const string MaritimeServiceRevenue = "401020100";
+        }
+        #endregion
     }
 }

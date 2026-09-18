@@ -4,7 +4,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class PrincipalService(IUnitOfWork unitOfWork, ILogger<PrincipalService> logger) : IPrincipalService
     {
@@ -30,10 +30,10 @@ namespace IBS.Services
             try
             {
                 await unitOfWork.Principal.AddAsync(model, cancellationToken);
-                
-                var auditTrail = new AuditTrail(username, $"Created new Principal #{model.PrincipalNumber}", "Principal");
+
+                var auditTrail = new MsapAuditTrail(username, $"Created new Principal #{model.PrincipalNumber}", "Principal");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
-                
+
                 await unitOfWork.SaveAsync(cancellationToken);
                 return ServiceResult<int>.Success(model.PrincipalId, "Principal created successfully.");
             }
@@ -71,7 +71,7 @@ namespace IBS.Services
                 existingPrincipal.IsVatable = model.IsVatable;
                 existingPrincipal.CustomerId = model.CustomerId;
 
-                var auditTrail = new AuditTrail(username, $"Updated Principal #{model.PrincipalNumber}", "Principal");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Principal #{model.PrincipalNumber}", "Principal");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -96,7 +96,7 @@ namespace IBS.Services
 
                 await unitOfWork.Principal.RemoveAsync(principal, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Principal #{principal.PrincipalNumber}", "Principal");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Principal #{principal.PrincipalNumber}", "Principal");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

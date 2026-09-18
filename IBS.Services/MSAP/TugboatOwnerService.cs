@@ -4,7 +4,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class TugboatOwnerService(IUnitOfWork unitOfWork, ILogger<TugboatOwnerService> logger) : ITugboatOwnerService
     {
@@ -23,10 +23,10 @@ namespace IBS.Services
             try
             {
                 await unitOfWork.TugboatOwner.AddAsync(model, cancellationToken);
-                
-                var auditTrail = new AuditTrail(username, $"Created new Tugboat Owner #{model.TugboatOwnerNumber}", "Tugboat Owner");
+
+                var auditTrail = new MsapAuditTrail(username, $"Created new Tugboat Owner #{model.TugboatOwnerNumber}", "Tugboat Owner");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
-                
+
                 await unitOfWork.SaveAsync(cancellationToken);
                 return ServiceResult<int>.Success(model.TugboatOwnerId, "Tugboat Owner created successfully.");
             }
@@ -51,7 +51,7 @@ namespace IBS.Services
                 existingOwner.TugboatOwnerName = model.TugboatOwnerName;
                 existingOwner.FixedRate = model.FixedRate;
 
-                var auditTrail = new AuditTrail(username, $"Updated Tugboat Owner #{model.TugboatOwnerNumber}", "Tugboat Owner");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Tugboat Owner #{model.TugboatOwnerNumber}", "Tugboat Owner");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -76,7 +76,7 @@ namespace IBS.Services
 
                 await unitOfWork.TugboatOwner.RemoveAsync(owner, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Tugboat Owner #{owner.TugboatOwnerNumber}", "Tugboat Owner");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Tugboat Owner #{owner.TugboatOwnerNumber}", "Tugboat Owner");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

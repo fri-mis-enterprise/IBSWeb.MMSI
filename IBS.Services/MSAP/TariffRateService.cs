@@ -5,7 +5,7 @@ using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class TariffRateService(IUnitOfWork unitOfWork, ILogger<TariffRateService> logger) : ITariffRateService
     {
@@ -24,7 +24,7 @@ namespace IBS.Services
             model ??= new TariffRate();
             model.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
             model.Ports = await unitOfWork.Port.GetMsapPortsSelectList(cancellationToken);
-            model.Services = await unitOfWork.Service.GetMsapActivitiesServicesById(cancellationToken);
+            model.Services = await unitOfWork.MsapService.GetMsapActivitiesServicesById(cancellationToken);
 
             if (model.TerminalId != 0)
             {
@@ -147,7 +147,7 @@ namespace IBS.Services
 
         private async Task RecordAuditAsync(string activity, string username, CancellationToken cancellationToken)
         {
-            var audit = new AuditTrail(username, activity, "Tariff Rate");
+            var audit = new MsapAuditTrail(username, activity, "Tariff Rate");
             await unitOfWork.AuditTrail.AddAsync(audit, cancellationToken);
         }
     }

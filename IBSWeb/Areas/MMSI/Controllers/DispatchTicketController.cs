@@ -4,15 +4,17 @@ using IBS.Models;
 using IBS.Models.Enums;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.ViewModels;
-using IBS.Services;
 using IBS.Services.AccessControl;
 using IBS.Services.Attributes;
 using IBS.Utility.Constants;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using IBS.Models.Filpride.Books;
+using IBS.Services.MSAP;
+using ICloudStorageService = IBS.Services.ICloudStorageService;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     /// <summary>
     /// Controller for managing Dispatch Tickets in the MMSI system.
@@ -512,7 +514,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAccess(ProcedureEnum.EditDispatchTicket, "Access denied. You don't have permission to change Dispatch Ticket status.")]
         public async Task<IActionResult> ChangeStatus(int id, string status, string activity, string docType, string successMessage, CancellationToken cancellationToken)
         {
-            var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+            var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
             if (model == null)
             {
                 return Json(new { success = false, message = "Ticket not found." });
@@ -543,7 +545,7 @@ namespace IBSWeb.Areas.User.Controllers
             model.EditedBy = User.Identity?.Name ?? "System";
             model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-            await unitOfWork.AuditTrail.AddAsync(new AuditTrail(model.EditedBy, $"{activity} for {docType} #{model.DispatchNumber}", docType), cancellationToken);
+            await unitOfWork.AuditTrail.AddAsync(new FilprideAuditTrail(model.EditedBy, $"{activity} for {docType} #{model.DispatchNumber}", docType), cancellationToken);
             await unitOfWork.SaveAsync(cancellationToken);
 
             return Json(new { success = true, message = successMessage });
@@ -599,7 +601,7 @@ namespace IBSWeb.Areas.User.Controllers
         [HttpGet]
         public async Task<IActionResult> GetVesselVoyageType(int vesselId, CancellationToken cancellationToken)
         {
-            var vessel = await unitOfWork.Vessel.GetAsync(v => v.VesselId == vesselId, cancellationToken);
+            var vessel = await unitOfWork.MsapVessel.GetAsync(v => v.VesselId == vesselId, cancellationToken);
             var voyageType = vessel?.VesselType == "FOREIGN" ? "Foreign" : "Local";
             return Json(voyageType);
         }
@@ -744,7 +746,7 @@ namespace IBSWeb.Areas.User.Controllers
         [HttpGet]
         public async Task<JsonResult> SearchCustomers(string? term, CancellationToken cancellationToken)
         {
-            var result = await unitOfWork.Customer.SearchCustomersDtoAsync(term ?? string.Empty, 10, cancellationToken);
+            var result = await unitOfWork.MsapCustomer.SearchCustomersDtoAsync(term ?? string.Empty, 10, cancellationToken);
             return Json(result);
         }
 

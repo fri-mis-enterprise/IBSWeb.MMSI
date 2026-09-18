@@ -7,7 +7,7 @@ using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class SuperAdminService(
         IUnitOfWork unitOfWork,
@@ -264,7 +264,7 @@ namespace IBS.Services
                         (j.COSNumber != null && j.COSNumber.Contains(search)) ||
                         (j.VoyageNumber != null && j.VoyageNumber.Contains(search)) ||
                         (j.Remarks != null && j.Remarks.Contains(search));
-                    var (items, total) = await unitOfWork.JobOrder.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
+                    var (items, total) = await unitOfWork.MsapJobOrder.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
                     return (items.Select(MapJobOrder), total);
                 }
                 case "DispatchTicket":
@@ -272,7 +272,7 @@ namespace IBS.Services
                     System.Linq.Expressions.Expression<Func<DispatchTicket, bool>>? filter = string.IsNullOrWhiteSpace(search) ? null : d =>
                         d.DispatchNumber.Contains(search) ||
                         (d.Remarks != null && d.Remarks.Contains(search));
-                    var (items, total) = await unitOfWork.DispatchTicket.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
+                    var (items, total) = await unitOfWork.MsapDispatchTicket.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
                     return (items.Select(MapDispatchTicket), total);
                 }
                 case "Billing":
@@ -281,7 +281,7 @@ namespace IBS.Services
                         b.MsapBillingNumber.Contains(search) ||
                         (b.VoyageNumber != null && b.VoyageNumber.Contains(search)) ||
                         (b.COSNumber != null && b.COSNumber.Contains(search));
-                    var (items, total) = await unitOfWork.Billing.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
+                    var (items, total) = await unitOfWork.MsapBilling.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
                     return (items.Select(MapBilling), total);
                 }
                 case "Collection":
@@ -290,7 +290,7 @@ namespace IBS.Services
                         c.MsapCollectionNumber.Contains(search) ||
                         (c.CheckNumber != null && c.CheckNumber.Contains(search)) ||
                         (c.Remarks != null && c.Remarks.Contains(search));
-                    var (items, total) = await unitOfWork.Collection.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
+                    var (items, total) = await unitOfWork.MsapCollection.GetPagedAsync(filter, sortColumn, sortDir, skip, take, ct);
                     return (items.Select(MapCollection), total);
                 }
                 default:
@@ -302,10 +302,10 @@ namespace IBS.Services
         {
             return table switch
             {
-                "JobOrder" => MapJobOrder(await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == id, ct)),
-                "DispatchTicket" => MapDispatchTicket(await unitOfWork.DispatchTicket.GetAsync(d => d.DispatchTicketId == id, ct)),
-                "Billing" => MapBilling(await unitOfWork.Billing.GetAsync(b => b.MsapBillingId == id, ct)),
-                "Collection" => MapCollection(await unitOfWork.Collection.GetAsync(c => c.MsapCollectionId == id, ct)),
+                "JobOrder" => MapJobOrder(await unitOfWork.MsapJobOrder.GetAsync(j => j.JobOrderId == id, ct)),
+                "DispatchTicket" => MapDispatchTicket(await unitOfWork.MsapDispatchTicket.GetAsync(d => d.DispatchTicketId == id, ct)),
+                "Billing" => MapBilling(await unitOfWork.MsapBilling.GetAsync(b => b.MsapBillingId == id, ct)),
+                "Collection" => MapCollection(await unitOfWork.MsapCollection.GetAsync(c => c.MsapCollectionId == id, ct)),
                 _ => null
             };
         }
@@ -350,25 +350,25 @@ namespace IBS.Services
 
         private async Task<ServiceResult> SaveJobOrderAsync(int id, Dictionary<string, string> changes, string username, CancellationToken ct)
         {
-            var entity = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == id, ct);
+            var entity = await unitOfWork.MsapJobOrder.GetAsync(j => j.JobOrderId == id, ct);
             return await ApplyChangesAsync(entity, entity?.JobOrderNumber, "Job Order", id, changes, username, ct);
         }
 
         private async Task<ServiceResult> SaveDispatchTicketAsync(int id, Dictionary<string, string> changes, string username, CancellationToken ct)
         {
-            var entity = await unitOfWork.DispatchTicket.GetAsync(d => d.DispatchTicketId == id, ct);
+            var entity = await unitOfWork.MsapDispatchTicket.GetAsync(d => d.DispatchTicketId == id, ct);
             return await ApplyChangesAsync(entity, entity?.DispatchNumber, "Dispatch Ticket", id, changes, username, ct);
         }
 
         private async Task<ServiceResult> SaveBillingAsync(int id, Dictionary<string, string> changes, string username, CancellationToken ct)
         {
-            var entity = await unitOfWork.Billing.GetAsync(b => b.MsapBillingId == id, ct);
+            var entity = await unitOfWork.MsapBilling.GetAsync(b => b.MsapBillingId == id, ct);
             return await ApplyChangesAsync(entity, entity?.MsapBillingNumber, "Billing", id, changes, username, ct);
         }
 
         private async Task<ServiceResult> SaveCollectionAsync(int id, Dictionary<string, string> changes, string username, CancellationToken ct)
         {
-            var entity = await unitOfWork.Collection.GetAsync(c => c.MsapCollectionId == id, ct);
+            var entity = await unitOfWork.MsapCollection.GetAsync(c => c.MsapCollectionId == id, ct);
             return await ApplyChangesAsync(entity, entity?.MsapCollectionNumber, "Collection", id, changes, username, ct);
         }
 
@@ -385,9 +385,9 @@ namespace IBS.Services
                     .Select(t => new SelectListItem(t.TerminalName, t.TerminalId.ToString())).ToList(),
                 "Tugboat" => (await unitOfWork.Tugboat.GetAllAsync(null, ct))
                     .Select(t => new SelectListItem($"{t.TugboatName} ({t.TugboatNumber})", t.TugboatId.ToString())).ToList(),
-                "Service" => (await unitOfWork.Service.GetAllAsync(null, ct))
+                "Service" => (await unitOfWork.MsapService.GetAllAsync(null, ct))
                     .Select(s => new SelectListItem(s.ServiceName, s.ServiceId.ToString())).ToList(),
-                "JobOrder" => (await unitOfWork.JobOrder.GetAllAsync(null, ct))
+                "JobOrder" => (await unitOfWork.MsapJobOrder.GetAllAsync(null, ct))
                     .Select(j => new SelectListItem(j.JobOrderNumber, j.JobOrderId.ToString())).ToList(),
                 "Principal" => (await unitOfWork.Principal.GetAllAsync(null, ct))
                     .Select(p => new SelectListItem(p.PrincipalName, p.PrincipalId.ToString())).ToList(),
@@ -410,7 +410,7 @@ namespace IBS.Services
                 return ServiceResult.Failure($"{documentType} not found.", ServiceResultStatus.NotFound);
             }
 
-            var auditEntries = new List<AuditTrail>();
+            var auditEntries = new List<MsapAuditTrail>();
             var type = entity.GetType();
             var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p is { CanRead: true, CanWrite: true })
@@ -440,7 +440,7 @@ namespace IBS.Services
 
                 var oldStr = FormatValue(currentValue);
                 var newStr = FormatValue(newValue);
-                auditEntries.Add(new AuditTrail(
+                auditEntries.Add(new MsapAuditTrail(
                     username,
                     $"Changed {FieldDisplayName(key)} from '{oldStr}' to '{newStr}' on {documentType} #{refVal}",
                     documentType, id, refVal));

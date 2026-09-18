@@ -5,14 +5,15 @@ using IBS.Models.MSAP;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using IBS.Services.Attributes;
-using IBS.Services;
 using IBS.Services.AccessControl;
 using IBS.Utility.Constants;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
 using System.Security.Claims;
+using IBS.Services.MSAP;
+using ICloudStorageService = IBS.Services.ICloudStorageService;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     /// <summary>
     /// Controller for managing Billing in the MMSI system.
@@ -74,9 +75,8 @@ namespace IBSWeb.Areas.User.Controllers
             try
             {
                 var username = User.Identity?.Name ?? "System";
-                var company = User.Claims.FirstOrDefault(c => c.Type == "Company")?.Value ?? SD.Company_MMSI;
 
-                var result = await billingService.CreateBillingAsync(model, username, company, cancellationToken);
+                var result = await billingService.CreateBillingAsync(model, username, cancellationToken);
 
                 if (result.IsSuccess)
                 {
@@ -128,7 +128,7 @@ namespace IBSWeb.Areas.User.Controllers
 
             if (model.JobOrderId.HasValue)
             {
-                var jobOrder = await unitOfWork.JobOrder.GetAsync(jo => jo.JobOrderId == model.JobOrderId.Value, cancellationToken);
+                var jobOrder = await unitOfWork.MsapJobOrder.GetAsync(jo => jo.JobOrderId == model.JobOrderId.Value, cancellationToken);
                 ViewData["CurrentJobOrderNumber"] = jobOrder?.JobOrderNumber;
             }
 
@@ -294,14 +294,14 @@ namespace IBSWeb.Areas.User.Controllers
         {
             try
             {
-                var billing = await unitOfWork.Billing.GetAsync(b => b.MsapBillingId == id, cancellationToken);
+                var billing = await unitOfWork.MsapBilling.GetAsync(b => b.MsapBillingId == id, cancellationToken);
                 if (billing == null)
                 {
                     return NotFound();
                 }
 
-                billing.PaidDispatchTickets = await unitOfWork.Billing.GetPaidDispatchTicketsAsync(billing.MsapBillingId, cancellationToken);
-                billing.UniqueTugboats = await unitOfWork.Billing.GetUniqueTugboatsListAsync(billing.MsapBillingId, cancellationToken);
+                billing.PaidDispatchTickets = await unitOfWork.MsapBilling.GetPaidDispatchTicketsAsync(billing.MsapBillingId, cancellationToken);
+                billing.UniqueTugboats = await unitOfWork.MsapBilling.GetUniqueTugboatsListAsync(billing.MsapBillingId, cancellationToken);
 
                 using var package = new ExcelPackage();
                 var worksheet = package.Workbook.Worksheets.Add($"Billing #{billing.MsapBillingNumber}");
@@ -496,7 +496,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAnyAccess("Access denied.", ProcedureEnum.CreateBilling, ProcedureEnum.EditBilling)]
         public async Task<JsonResult> SearchCustomers(string? term, CancellationToken cancellationToken)
         {
-            var result = await unitOfWork.Customer.SearchCustomersDtoAsync(term ?? string.Empty, 10, cancellationToken);
+            var result = await unitOfWork.MsapCustomer.SearchCustomersDtoAsync(term ?? string.Empty, 10, cancellationToken);
             return Json(result);
         }
 
@@ -626,7 +626,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAnyAccess("Access denied.", ProcedureEnum.CreateBilling, ProcedureEnum.EditBilling)]
         public async Task<IActionResult> CheckBillingNumber(string number, CancellationToken cancellationToken)
         {
-            var exists = await unitOfWork.Billing.GetAsync(b => b.MsapBillingNumber == number, cancellationToken) != null;
+            var exists = await unitOfWork.MsapBilling.GetAsync(b => b.MsapBillingNumber == number, cancellationToken) != null;
             return Json(new { exists });
         }
 

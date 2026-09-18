@@ -4,7 +4,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class TugMasterService(IUnitOfWork unitOfWork, ILogger<TugMasterService> logger) : ITugMasterService
     {
@@ -23,10 +23,10 @@ namespace IBS.Services
             try
             {
                 await unitOfWork.TugMaster.AddAsync(model, cancellationToken);
-                
-                var auditTrail = new AuditTrail(username, $"Created new Tug Master #{model.TugMasterNumber}", "Tug Master");
+
+                var auditTrail = new MsapAuditTrail(username, $"Created new Tug Master #{model.TugMasterNumber}", "Tug Master");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
-                
+
                 await unitOfWork.SaveAsync(cancellationToken);
                 return ServiceResult<int>.Success(model.TugMasterId, "Tug Master created successfully.");
             }
@@ -51,7 +51,7 @@ namespace IBS.Services
                 existingTugMaster.TugMasterName = model.TugMasterName;
                 existingTugMaster.IsActive = model.IsActive;
 
-                var auditTrail = new AuditTrail(username, $"Updated Tug Master #{model.TugMasterNumber}", "Tug Master");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Tug Master #{model.TugMasterNumber}", "Tug Master");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -76,7 +76,7 @@ namespace IBS.Services
 
                 await unitOfWork.TugMaster.RemoveAsync(tugMaster, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Tug Master #{tugMaster.TugMasterNumber}", "Tug Master");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Tug Master #{tugMaster.TugMasterNumber}", "Tug Master");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

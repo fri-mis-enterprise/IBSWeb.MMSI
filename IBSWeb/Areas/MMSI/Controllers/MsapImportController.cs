@@ -13,7 +13,7 @@ using System.Text;
 using IBS.Models.Enums;
 using IBS.Services.Attributes;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     public class MsapImportController(ApplicationDbContext dbContext, ILogger<MsapImportController> logger) : Controller
@@ -417,7 +417,7 @@ namespace IBSWeb.Areas.User.Controllers
             }
 
             maps.BankAccount.Clear();
-            foreach (var b in await dbContext.BankAccounts.AsNoTracking().ToListAsync(ct))
+            foreach (var b in await dbContext.MsapBankAccounts.AsNoTracking().ToListAsync(ct))
             {
                 if (b.BankAccountCode != null)
                 {
@@ -485,8 +485,8 @@ namespace IBSWeb.Areas.User.Controllers
             var records = csv.GetRecords<dynamic>().Select(r => (IDictionary<string, object?>)r).ToList();
             var newRecords = new List<(ChartOfAccount Entity, int LegacyId, int? LegacyParentId)>();
 
-            var existingAccNumbers = await dbContext.ChartOfAccounts.AsNoTracking().Where(a => a.AccountNumber != null).Select(a => a.AccountNumber!).ToListAsync();
-            var existingAccNames = await dbContext.ChartOfAccounts.AsNoTracking().Select(a => a.AccountName).ToListAsync();
+            var existingAccNumbers = await dbContext.MsapChartOfAccounts.AsNoTracking().Where(a => a.AccountNumber != null).Select(a => a.AccountNumber!).ToListAsync();
+            var existingAccNames = await dbContext.MsapChartOfAccounts.AsNoTracking().Select(a => a.AccountName).ToListAsync();
             var existingAccSet = new HashSet<string>(existingAccNumbers, StringComparer.OrdinalIgnoreCase);
             var existingNameSet = new HashSet<string>(existingAccNames, StringComparer.OrdinalIgnoreCase);
 
@@ -533,7 +533,7 @@ namespace IBSWeb.Areas.User.Controllers
 
             if (newRecords.Count > 0)
             {
-                await dbContext.ChartOfAccounts.AddRangeAsync(newRecords.Select(x => x.Entity));
+                await dbContext.MsapChartOfAccounts.AddRangeAsync(newRecords.Select(x => x.Entity));
                 await dbContext.SaveChangesAsync();
             }
 
@@ -598,7 +598,7 @@ namespace IBSWeb.Areas.User.Controllers
 
             if (newRecords.Count > 0)
             {
-                await dbContext.BankAccounts.AddRangeAsync(newRecords);
+                await dbContext.MsapBankAccounts.AddRangeAsync(newRecords);
                 await dbContext.SaveChangesAsync();
                 foreach (var r in newRecords)
                 {

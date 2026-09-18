@@ -2,9 +2,9 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Models.Enums;
 using IBS.Utility.Helpers;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
-    public interface IUserAccessService
+    public interface MSAP_IUserAccessService
     {
         Task<bool> CheckAccess(string id, ProcedureEnum procedure, CancellationToken cancellationToken = default);
         Task<IEnumerable<UserAccess>> GetAllAsync(CancellationToken cancellationToken);

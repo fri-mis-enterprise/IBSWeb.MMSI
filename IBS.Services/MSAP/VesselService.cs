@@ -4,7 +4,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class VesselService(IUnitOfWork unitOfWork, ILogger<VesselService> logger) : IVesselService
     {
@@ -24,7 +24,7 @@ namespace IBS.Services
             {
                 await unitOfWork.Vessel.AddAsync(model, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Created new Vessel #{model.VesselNumber}", "Vessel");
+                var auditTrail = new MsapAuditTrail(username, $"Created new Vessel #{model.VesselNumber}", "Vessel");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -52,7 +52,7 @@ namespace IBS.Services
                 existingVessel.VesselName = model.VesselName;
                 existingVessel.VesselType = model.VesselType;
 
-                var auditTrail = new AuditTrail(username, $"Updated Vessel #{oldNumber} to #{model.VesselNumber}", "Vessel");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Vessel #{oldNumber} to #{model.VesselNumber}", "Vessel");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -77,7 +77,7 @@ namespace IBS.Services
 
                 await unitOfWork.Vessel.RemoveAsync(vessel, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Vessel #{vessel.VesselNumber}", "Vessel");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Vessel #{vessel.VesselNumber}", "Vessel");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

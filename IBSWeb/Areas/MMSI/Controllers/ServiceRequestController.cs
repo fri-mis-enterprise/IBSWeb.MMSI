@@ -16,7 +16,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     [RequireAnyAccess(
@@ -60,7 +60,7 @@ namespace IBSWeb.Areas.User.Controllers
         public async Task<IActionResult> Create(CancellationToken cancellationToken = default)
         {
             var viewModel = new ServiceRequestViewModel();
-            viewModel = await unitOfWork.ServiceRequest.GetDispatchTicketSelectLists(viewModel,
+            viewModel = await unitOfWork.MsapServiceRequest.GetDispatchTicketSelectLists(viewModel,
                 cancellationToken);
             viewModel.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
             await PopulateJobOrdersList(viewModel, cancellationToken);
@@ -73,7 +73,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAccess(ProcedureEnum.CreateServiceRequest, "Access denied. You don't have permission to create Service Requests.")]
         public async Task<IActionResult> Create(ServiceRequestViewModel viewModel, IFormFile? imageFile, IFormFile? videoFile, CancellationToken cancellationToken = default)
         {
-            viewModel = await unitOfWork.ServiceRequest.GetDispatchTicketSelectLists(viewModel,
+            viewModel = await unitOfWork.MsapServiceRequest.GetDispatchTicketSelectLists(viewModel,
                 cancellationToken);
             viewModel.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
             await PopulateJobOrdersList(viewModel, cancellationToken);
@@ -136,12 +136,12 @@ namespace IBSWeb.Areas.User.Controllers
                     model.Status = SD.ServiceRequestStatus.Requested;
                 }
 
-                await unitOfWork.DispatchTicket.AddAsync(model,
+                await unitOfWork.MsapDispatchTicket.AddAsync(model,
                     cancellationToken);
 
                 #region -- Audit Trail
 
-                var audit = new AuditTrail(
+                var audit = new MsapAuditTrail(
                     await GetUserNameAsync() ?? throw new InvalidOperationException(),
                     model.JobOrderId.HasValue
                         ? $"Create service request #{model.DispatchNumber} (Job Order #{model.JobOrderId})"
@@ -173,7 +173,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAccess(ProcedureEnum.CreateServiceRequest, "Access denied. You don't have permission to edit Service Requests.")]
         public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken = default)
         {
-            var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id,
+            var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id,
                 cancellationToken);
 
             if (model == null)
@@ -183,7 +183,7 @@ namespace IBSWeb.Areas.User.Controllers
 
             var viewModel = new ServiceRequestViewModel();
             viewModel.FromEntity(model);
-            viewModel = await unitOfWork.ServiceRequest.GetDispatchTicketSelectLists(viewModel,
+            viewModel = await unitOfWork.MsapServiceRequest.GetDispatchTicketSelectLists(viewModel,
                 cancellationToken);
             viewModel.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
             await PopulateJobOrdersList(viewModel, cancellationToken);
@@ -206,7 +206,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAccess(ProcedureEnum.CreateServiceRequest, "Access denied. You don't have permission to edit Service Requests.")]
         public async Task<IActionResult> Edit(ServiceRequestViewModel viewModel, IFormFile? imageFile, IFormFile? videoFile, CancellationToken cancellationToken = default)
         {
-            viewModel = await unitOfWork.ServiceRequest.GetDispatchTicketSelectLists(viewModel,
+            viewModel = await unitOfWork.MsapServiceRequest.GetDispatchTicketSelectLists(viewModel,
                 cancellationToken);
             viewModel.Customers = await unitOfWork.GetCustomerListAsyncById(cancellationToken);
             await PopulateJobOrdersList(viewModel, cancellationToken);
@@ -217,7 +217,7 @@ namespace IBSWeb.Areas.User.Controllers
             try
             {
                 var incoming = viewModel.ToEntity();
-                var currentModel = await unitOfWork.DispatchTicket.GetAsync(dt =>
+                var currentModel = await unitOfWork.MsapDispatchTicket.GetAsync(dt =>
                         dt.DispatchTicketId == incoming.DispatchTicketId,
                     cancellationToken);
 
@@ -353,7 +353,7 @@ namespace IBSWeb.Areas.User.Controllers
                     ? $"Edit service request #{currentModel.DispatchNumber}, {string.Join(", ", changes)}"
                     : $"No changes detected: id#{currentModel.DispatchNumber}";
 
-                var audit = new AuditTrail(
+                var audit = new MsapAuditTrail(
                     await GetUserNameAsync() ?? throw new InvalidOperationException(),
                     activity,
                     "Service Request"
@@ -424,7 +424,7 @@ namespace IBSWeb.Areas.User.Controllers
         [HttpGet]
         public async Task<IActionResult> ChangeTerminal(int portId, CancellationToken cancellationToken = default)
         {
-            var terminals = await unitOfWork.Terminal.GetAllAsync(t => t.PortId == portId,
+            var terminals = await unitOfWork.MsapTerminal.GetAllAsync(t => t.PortId == portId,
                 cancellationToken);
 
             var terminalsList = terminals.Select(t => new SelectListItem
@@ -556,7 +556,7 @@ namespace IBSWeb.Areas.User.Controllers
         {
             try
             {
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id,
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id,
                     cancellationToken);
 
                 if (model == null)
@@ -595,7 +595,7 @@ namespace IBSWeb.Areas.User.Controllers
         {
             try
             {
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id,
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id,
                     cancellationToken);
 
                 if (model == null)
@@ -633,7 +633,7 @@ namespace IBSWeb.Areas.User.Controllers
         [RequireAccess(ProcedureEnum.PostServiceRequest, "Access denied. You don't have permission to post Service Requests.")]
         public async Task<IActionResult> Post(int id, int? jobOrderId, CancellationToken cancellationToken = default)
         {
-            var record = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+            var record = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
             if (record is { Status: SD.ServiceRequestStatus.Requested })
             {
                 record.Status = SD.DispatchTicketStatus.ForTariff;
@@ -642,7 +642,7 @@ namespace IBSWeb.Areas.User.Controllers
                     ? $"Posted service request #{record.DispatchNumber} (Job Order #{jobOrderId})"
                     : $"Posted service request #{record.DispatchNumber}";
 
-                var audit = new AuditTrail(
+                var audit = new MsapAuditTrail(
                     await GetUserNameAsync() ?? throw new InvalidOperationException(),
                     auditMsg,
                     "Service Request"
@@ -668,7 +668,7 @@ namespace IBSWeb.Areas.User.Controllers
         {
             try
             {
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return Json(new { success = false, message = "Service request not found." });
@@ -685,7 +685,7 @@ namespace IBSWeb.Areas.User.Controllers
                 model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
                 await unitOfWork.AuditTrail.AddAsync(
-                    new AuditTrail(model.EditedBy, $"Deleted service request #{model.DispatchNumber}", "Service Request", model.DispatchTicketId, model.DispatchNumber),
+                    new MsapAuditTrail(model.EditedBy, $"Deleted service request #{model.DispatchNumber}", "Service Request", model.DispatchTicketId, model.DispatchNumber),
                     cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -705,7 +705,7 @@ namespace IBSWeb.Areas.User.Controllers
         {
             try
             {
-                var model = await unitOfWork.DispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
+                var model = await unitOfWork.MsapDispatchTicket.GetAsync(dt => dt.DispatchTicketId == id, cancellationToken);
                 if (model == null)
                 {
                     return Json(new { success = false, message = "Service request not found." });
@@ -721,7 +721,7 @@ namespace IBSWeb.Areas.User.Controllers
                 model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
                 await unitOfWork.AuditTrail.AddAsync(
-                    new AuditTrail(model.EditedBy, $"Restored service request #{model.DispatchNumber}", "Service Request", model.DispatchTicketId, model.DispatchNumber),
+                    new MsapAuditTrail(model.EditedBy, $"Restored service request #{model.DispatchNumber}", "Service Request", model.DispatchTicketId, model.DispatchNumber),
                     cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

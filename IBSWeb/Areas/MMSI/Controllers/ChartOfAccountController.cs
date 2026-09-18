@@ -2,11 +2,12 @@ using System.Security.Claims;
 using IBS.Models;
 using IBS.Models.Enums;
 using IBS.Services;
+using IBS.Services.MSAP;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
-namespace IBSWeb.Areas.User.Controllers
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     public class ChartOfAccountController(

@@ -1,6 +1,6 @@
 using IBS.Models;
 using IBS.Models.MSAP;
-using IBS.Services;
+using IBS.Services.MSAP;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IBSWeb.Areas.MMSI.Controllers

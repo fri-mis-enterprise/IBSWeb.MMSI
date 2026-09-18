@@ -4,29 +4,29 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class MaritimeServiceService(IUnitOfWork unitOfWork, ILogger<MaritimeServiceService> logger) : IMaritimeServiceService
     {
         public async Task<IEnumerable<Service>> GetAllAsync(CancellationToken cancellationToken)
         {
-            return await unitOfWork.Service.GetAllAsync(cancellationToken: cancellationToken);
+            return await unitOfWork.MsapService.GetAllAsync(cancellationToken: cancellationToken);
         }
 
         public async Task<Service?> GetByIdAsync(int id, CancellationToken cancellationToken)
         {
-            return await unitOfWork.Service.GetAsync(s => s.ServiceId == id, cancellationToken);
+            return await unitOfWork.MsapService.GetAsync(s => s.ServiceId == id, cancellationToken);
         }
 
         public async Task<ServiceResult<int>> CreateAsync(Service model, string username, CancellationToken cancellationToken)
         {
             try
             {
-                await unitOfWork.Service.AddAsync(model, cancellationToken);
-                
-                var auditTrail = new AuditTrail(username, $"Created new Service #{model.ServiceNumber}", "Service");
+                await unitOfWork.MsapService.AddAsync(model, cancellationToken);
+
+                var auditTrail = new MsapAuditTrail(username, $"Created new Service #{model.ServiceNumber}", "Service");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
-                
+
                 await unitOfWork.SaveAsync(cancellationToken);
                 return ServiceResult<int>.Success(model.ServiceId, "Service created successfully.");
             }
@@ -41,7 +41,7 @@ namespace IBS.Services
         {
             try
             {
-                var existingService = await unitOfWork.Service.GetAsync(s => s.ServiceId == model.ServiceId, cancellationToken);
+                var existingService = await unitOfWork.MsapService.GetAsync(s => s.ServiceId == model.ServiceId, cancellationToken);
                 if (existingService == null)
                 {
                     return ServiceResult.Failure("Service not found.", ServiceResultStatus.NotFound);
@@ -50,7 +50,7 @@ namespace IBS.Services
                 existingService.ServiceNumber = model.ServiceNumber;
                 existingService.ServiceName = model.ServiceName;
 
-                var auditTrail = new AuditTrail(username, $"Updated Service #{model.ServiceNumber}", "Service");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Service #{model.ServiceNumber}", "Service");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -67,15 +67,15 @@ namespace IBS.Services
         {
             try
             {
-                var service = await unitOfWork.Service.GetAsync(s => s.ServiceId == id, cancellationToken);
+                var service = await unitOfWork.MsapService.GetAsync(s => s.ServiceId == id, cancellationToken);
                 if (service == null)
                 {
                     return ServiceResult.Failure("Service not found.", ServiceResultStatus.NotFound);
                 }
 
-                await unitOfWork.Service.RemoveAsync(service, cancellationToken);
+                await unitOfWork.MsapService.RemoveAsync(service, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Service #{service.ServiceNumber}", "Service");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Service #{service.ServiceNumber}", "Service");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

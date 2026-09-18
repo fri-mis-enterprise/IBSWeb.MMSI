@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class RoleService(
         RoleManager<IdentityRole> roleManager)

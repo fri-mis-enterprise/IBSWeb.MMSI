@@ -4,7 +4,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.Helpers;
 using Microsoft.Extensions.Logging;
 
-namespace IBS.Services
+namespace IBS.Services.MSAP
 {
     public class TugboatService(IUnitOfWork unitOfWork, ILogger<TugboatService> logger) : ITugboatService
     {
@@ -31,10 +31,10 @@ namespace IBS.Services
             try
             {
                 await unitOfWork.Tugboat.AddAsync(model, cancellationToken);
-                
-                var auditTrail = new AuditTrail(username, $"Created new Tugboat #{model.TugboatNumber}", "Tugboat");
+
+                var auditTrail = new MsapAuditTrail(username, $"Created new Tugboat #{model.TugboatNumber}", "Tugboat");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
-                
+
                 await unitOfWork.SaveAsync(cancellationToken);
                 return ServiceResult<int>.Success(model.TugboatId, "Tugboat created successfully.");
             }
@@ -61,7 +61,7 @@ namespace IBS.Services
                 existingTugboat.TugboatOwnerId = model.TugboatOwnerId;
                 existingTugboat.PortId = model.PortId;
 
-                var auditTrail = new AuditTrail(username, $"Updated Tugboat #{model.TugboatNumber}", "Tugboat");
+                var auditTrail = new MsapAuditTrail(username, $"Updated Tugboat #{model.TugboatNumber}", "Tugboat");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);
@@ -86,7 +86,7 @@ namespace IBS.Services
 
                 await unitOfWork.Tugboat.RemoveAsync(tugboat, cancellationToken);
 
-                var auditTrail = new AuditTrail(username, $"Deleted Tugboat #{tugboat.TugboatNumber}", "Tugboat");
+                var auditTrail = new MsapAuditTrail(username, $"Deleted Tugboat #{tugboat.TugboatNumber}", "Tugboat");
                 await unitOfWork.AuditTrail.AddAsync(auditTrail, cancellationToken);
 
                 await unitOfWork.SaveAsync(cancellationToken);

@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-namespace IBSWeb.Areas.User.Controllers
+
+namespace IBSWeb.Areas.MMSI.Controllers
 {
     [Area("User")]
     [Authorize(Roles = "Admin")]
@@ -21,7 +22,7 @@ namespace IBSWeb.Areas.User.Controllers
 
         public async Task<IActionResult> Index(CancellationToken cancellationToken)
         {
-            var bankAccounts = await unitOfWork.BankAccount.GetAllAsync(cancellationToken: cancellationToken);
+            var bankAccounts = await unitOfWork.MsapBankAccount.GetAllAsync(cancellationToken: cancellationToken);
             return View(bankAccounts);
         }
 
@@ -35,7 +36,7 @@ namespace IBSWeb.Areas.User.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(BankAccountViewModel bankAccount, CancellationToken cancellationToken)
         {
-            if (await unitOfWork.BankAccount.IsBankAccountNoExist(bankAccount.AccountNo, cancellationToken))
+            if (await unitOfWork.MsapBankAccount.IsBankAccountNoExist(bankAccount.AccountNo, cancellationToken))
             {
                 ModelState.AddModelError("AccountNo", "Account Number already exists.");
                 return View(bankAccount);
@@ -44,7 +45,7 @@ namespace IBSWeb.Areas.User.Controllers
             bankAccount.CreatedBy = GetUserFullName();
             bankAccount.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-            await unitOfWork.BankAccount.AddAsync(bankAccount, cancellationToken);
+            await unitOfWork.MsapBankAccount.AddAsync(bankAccount, cancellationToken);
             await unitOfWork.SaveAsync(cancellationToken);
             TempData["success"] = "Bank Account created successfully.";
             return RedirectToAction(nameof(Index));
@@ -53,7 +54,7 @@ namespace IBSWeb.Areas.User.Controllers
         [HttpGet]
         public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
         {
-            var bankAccount = await unitOfWork.BankAccount.GetAsync(b => b.BankAccountId == id, cancellationToken);
+            var bankAccount = await unitOfWork.MsapBankAccount.GetAsync(b => b.BankAccountId == id, cancellationToken);
             if (bankAccount == null)
             {
                 return NotFound();
@@ -65,7 +66,7 @@ namespace IBSWeb.Areas.User.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(BankAccountViewModel bankAccount, CancellationToken cancellationToken)
         {
-            var existingBankAccount = await unitOfWork.BankAccount.GetAsync(b => b.BankAccountId == bankAccount.BankAccountId, cancellationToken);
+            var existingBankAccount = await unitOfWork.MsapBankAccount.GetAsync(b => b.BankAccountId == bankAccount.BankAccountId, cancellationToken);
             if (existingBankAccount == null)
             {
                 return NotFound();
@@ -73,7 +74,7 @@ namespace IBSWeb.Areas.User.Controllers
 
             if (existingBankAccount.AccountNo != bankAccount.AccountNo)
             {
-                if (await unitOfWork.BankAccount.IsBankAccountNoExist(bankAccount.AccountNo, cancellationToken))
+                if (await unitOfWork.MsapBankAccount.IsBankAccountNoExist(bankAccount.AccountNo, cancellationToken))
                 {
                     ModelState.AddModelError("AccountNo", "Account Number already exists.");
                     return View(bankAccount);
@@ -85,22 +86,21 @@ namespace IBSWeb.Areas.User.Controllers
             existingBankAccount.Branch = bankAccount.Branch;
             existingBankAccount.AccountNo = bankAccount.AccountNo;
             existingBankAccount.AccountName = bankAccount.AccountName;
-            existingBankAccount.Company = bankAccount.Company;
 
             await unitOfWork.SaveAsync(cancellationToken);
             TempData["success"] = "Bank Account updated successfully.";
             return RedirectToAction(nameof(Index));
         }
-        
+
         #region API Calls
-        
+
         [HttpGet]
         public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
         {
-            var bankAccounts = await unitOfWork.BankAccount.GetAllAsync(cancellationToken: cancellationToken);
+            var bankAccounts = await unitOfWork.MsapBankAccount.GetAllAsync(cancellationToken: cancellationToken);
             return Json(new { data = bankAccounts });
         }
-        
+
         #endregion
     }
 }
