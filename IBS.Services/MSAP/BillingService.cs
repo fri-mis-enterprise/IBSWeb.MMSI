@@ -109,7 +109,7 @@ namespace IBS.Services.MSAP
                 model.Status = SD.BillingStatus.ForPosting; // Changed from ForCollection
                 model.CreatedBy = username;
                 model.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
-                model.Company = company;
+                model.Company = string.Empty;
 
                 if (model.PrincipalId.HasValue && model.PrincipalId != 0)
                 {
@@ -1056,5 +1056,4 @@ namespace IBS.Services.MSAP
         }
     }
 }
-
 

@@ -4,6 +4,8 @@ using IBS.DataAccess.Repository;
 using IBS.DataAccess.Repository.IRepository;
 using IBS.DataAccess.Repository.MasterFile;
 using IBS.DataAccess.Repository.MasterFile.IRepository;
+using IBS.DataAccess.Repository.Msap;
+using IBS.DataAccess.Repository.Msap.IRepository;
 using IBS.Models;
 using IBS.Services;
 using IBS.Services.Attributes;
@@ -77,6 +79,7 @@ if (builder.Environment.IsDevelopment())
 
 // Repositories + DI
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IMsapAuditTrailRepository, MsapAuditTrailRepository>();
 builder.Services.AddScoped<ProvisionalReceiptTaggingService>();
 builder.Services.AddScoped<CheckVoucherDocumentationService>();
 builder.Services.AddOptions<BrandingOptions>()

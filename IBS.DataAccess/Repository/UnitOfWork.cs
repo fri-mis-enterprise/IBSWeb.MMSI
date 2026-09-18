@@ -6,6 +6,7 @@ using IBS.DataAccess.Repository.IRepository;
 using IBS.DataAccess.Repository.MasterFile.IRepository;
 using IBS.DataAccess.Repository.MasterFile;
 using IBS.DataAccess.Repository.Msap.IRepository;
+using IBS.DataAccess.Repository.Msap;
 using IBS.Models.Enums;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,10 @@ namespace IBS.DataAccess.Repository
     public class UnitOfWork : IUnitOfWork
     {
         private readonly ApplicationDbContext _db;
+
+        public UnitOfWork(ApplicationDbContext db) : this(db, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!)
+        {
+        }
 
         public IProductRepository Product { get; private set; }
         public ICompanyRepository Company { get; private set; }
@@ -73,7 +78,18 @@ namespace IBS.DataAccess.Repository
                     cancellationToken);
         }
 
-        public IAuditTrailRepository AuditTrail { get; }
+        public IMsapAuditTrailRepository AuditTrail { get; }
+        public IMsapChartOfAccountRepository MsapChartOfAccount { get; }
+        public IMsapChartOfAccountRepository ChartOfAccount => MsapChartOfAccount;
+        public IMsapSupplierRepository MsapSupplier { get; }
+        public IMsapSupplierRepository Supplier => MsapSupplier;
+        public IMsapCustomerRepository MsapCustomer { get; }
+        public IMsapCustomerRepository Customer => MsapCustomer;
+        public IMsapTermsRepository Terms { get; }
+        public IMsapBankAccountRepository MsapBankAccount { get; }
+        public IMsapBankAccountRepository BankAccount => MsapBankAccount;
+        public IMsapEmployeeRepository Employee { get; }
+        public IPostedPeriodRepository PostedPeriod { get; }
         public Task<List<SelectListItem>> GetCustomerListAsyncById(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
@@ -130,18 +146,27 @@ namespace IBS.DataAccess.Repository
         public IDispatchTicketRepository MsapDispatchTicket { get; }
         public IBillingRepository MsapBilling { get; }
         public ICollectionRepository MsapCollection { get; }
-        public IReportRepository MsapReport { get; }
-        public IServiceRepository MsapService { get; }
+        public IBS.DataAccess.Repository.Msap.IRepository.IReportRepository MsapReport { get; }
+        public IBS.DataAccess.Repository.Msap.IRepository.IServiceRepository MsapService { get; }
         public ITariffTableRepository TariffTable { get; }
-        public IPortRepository Port { get; }
-        public IPrincipalRepository Principal { get; }
-        public ITerminalRepository Terminal { get; }
-        public ITugboatRepository Tugboat { get; }
-        public ITugMasterRepository TugMaster { get; }
-        public ITugboatOwnerRepository TugboatOwner { get; }
-        public IUserAccessRepository UserAccess { get; }
-        public IVesselRepository Vessel { get; }
-        public IVesselScheduleRepository VesselSchedule { get; }
+        public IPortRepository MsapPort { get; }
+        public IPortRepository Port => MsapPort;
+        public IPrincipalRepository MsapPrincipal { get; }
+        public IPrincipalRepository Principal => MsapPrincipal;
+        public ITerminalRepository MsapTerminal { get; }
+        public ITerminalRepository Terminal => MsapTerminal;
+        public ITugboatRepository MsapTugboat { get; }
+        public ITugboatRepository Tugboat => MsapTugboat;
+        public ITugMasterRepository MsapTugMaster { get; }
+        public ITugMasterRepository TugMaster => MsapTugMaster;
+        public ITugboatOwnerRepository MsapTugboatOwner { get; }
+        public ITugboatOwnerRepository TugboatOwner => MsapTugboatOwner;
+        public IUserAccessRepository MsapUserAccess { get; }
+        public IUserAccessRepository UserAccess => MsapUserAccess;
+        public IVesselRepository MsapVessel { get; }
+        public IVesselRepository Vessel => MsapVessel;
+        public IVesselScheduleRepository MsapVesselSchedule { get; }
+        public IVesselScheduleRepository VesselSchedule => MsapVesselSchedule;
 
         #region--Filpride
 
@@ -201,10 +226,17 @@ namespace IBS.DataAccess.Repository
 
         #endregion
 
-        public UnitOfWork(ApplicationDbContext db, IAuditTrailRepository msapAuditTrail, IMsapRepository msap, IServiceRequestRepository serviceRequest, IJobOrderRepository jobOrder, IDispatchTicketRepository dispatchTicket, IBillingRepository billing, ICollectionRepository collection, IReportRepository report, IServiceRepository service, ITariffTableRepository tariffTable, IPortRepository port, IPrincipalRepository principal, ITerminalRepository terminal, ITugboatRepository tugboat, ITugMasterRepository tugMaster, ITugboatOwnerRepository tugboatOwner, IUserAccessRepository userAccess, IVesselRepository vessel, IVesselScheduleRepository vesselSchedule)
+        public UnitOfWork(ApplicationDbContext db, IMsapAuditTrailRepository msapAuditTrail, IMsapRepository msap, IServiceRequestRepository serviceRequest, IJobOrderRepository jobOrder, IDispatchTicketRepository dispatchTicket, IBillingRepository billing, ICollectionRepository collection, IBS.DataAccess.Repository.Msap.IRepository.IReportRepository report, IBS.DataAccess.Repository.Msap.IRepository.IServiceRepository service, ITariffTableRepository tariffTable, IPortRepository port, IPrincipalRepository principal, ITerminalRepository terminal, ITugboatRepository tugboat, ITugMasterRepository tugMaster, ITugboatOwnerRepository tugboatOwner, IUserAccessRepository userAccess, IVesselRepository vessel, IVesselScheduleRepository vesselSchedule)
         {
             _db = db;
             AuditTrail = msapAuditTrail;
+            MsapChartOfAccount = new MsapChartOfAccountRepository(_db);
+            MsapSupplier = new MsapSupplierRepository(_db);
+            MsapCustomer = new MsapCustomerRepository(_db);
+            Terms = new MsapTermsRepository(_db);
+            MsapBankAccount = new MsapBankAccountRepository(_db);
+            PostedPeriod = new PostedPeriodRepository(_db);
+            Employee = new MsapEmployeeRepository(_db);
             Msap = msap;
             MsapServiceRequest = serviceRequest;
             MsapJobOrder = jobOrder;
@@ -214,15 +246,15 @@ namespace IBS.DataAccess.Repository
             MsapReport = report;
             MsapService = service;
             TariffTable = tariffTable;
-            Port = port;
-            Principal = principal;
-            Terminal = terminal;
-            Tugboat = tugboat;
-            TugMaster = tugMaster;
-            TugboatOwner = tugboatOwner;
-            UserAccess = userAccess;
-            Vessel = vessel;
-            VesselSchedule = vesselSchedule;
+            MsapPort = port;
+            MsapPrincipal = principal;
+            MsapTerminal = terminal;
+            MsapTugboat = tugboat;
+            MsapTugMaster = tugMaster;
+            MsapTugboatOwner = tugboatOwner;
+            MsapUserAccess = userAccess;
+            MsapVessel = vessel;
+            MsapVesselSchedule = vesselSchedule;
 
             Product = new ProductRepository(_db);
             Company = new CompanyRepository(_db);
@@ -266,13 +298,13 @@ namespace IBS.DataAccess.Repository
 
             #region Books and Report
             FilprideInventory = new InventoryRepository(_db);
-            FilprideReport = new ReportRepository(_db);
+            FilprideReport = new IBS.DataAccess.Repository.Filpride.ReportRepository(_db);
             #endregion
 
             #region Master File
 
             FilprideBankAccount = new BankAccountRepository(_db);
-            FilprideService = new ServiceRepository(_db);
+            FilprideService = new IBS.DataAccess.Repository.Filpride.ServiceRepository(_db);
 
             #endregion
 
@@ -282,6 +314,13 @@ namespace IBS.DataAccess.Repository
         public async Task SaveAsync(CancellationToken cancellationToken = default)
         {
             await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task ExecuteInTransactionAsync(Func<Task> action, CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+            await action();
+            await transaction.CommitAsync(cancellationToken);
         }
 
         public void Dispose() => _db.Dispose();

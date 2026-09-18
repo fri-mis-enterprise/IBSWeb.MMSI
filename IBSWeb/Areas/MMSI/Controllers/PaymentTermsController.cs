@@ -134,7 +134,7 @@ namespace IBSWeb.Areas.MMSI.Controllers
 
                 #region -- Audit Trail Recording --
 
-                FilprideAuditTrail msapAuditTrailBook = new(getUserFullName,
+                MsapAuditTrail msapAuditTrailBook = new(getUserFullName,
                     $"Create new Terms #{model.TermsCode}", "Terms");
                 await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 
@@ -192,7 +192,7 @@ namespace IBSWeb.Areas.MMSI.Controllers
 
                 #region -- Audit Trail Recording --
 
-                FilprideAuditTrail msapAuditTrailBook = new (getUserFullName,
+                MsapAuditTrail msapAuditTrailBook = new (getUserFullName,
                     $"Edited Terms #{model.TermsCode}", "Terms");
                 await unitOfWork.AuditTrail.AddAsync(msapAuditTrailBook, cancellationToken);
 

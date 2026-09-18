@@ -125,11 +125,14 @@ namespace IBS.DataAccess.Repository.IRepository
 
         #region--Master Files
 
-        IChartOfAccountRepository MsapChartOfAccount { get; }
-        ISupplierRepository MsapSupplier { get; }
-        ICustomerRepository MsapCustomer { get; }
-        IAuditTrailRepository AuditTrail { get; }
-        ITermsRepository Terms { get; }
+        IMsapChartOfAccountRepository MsapChartOfAccount { get; }
+        IMsapChartOfAccountRepository ChartOfAccount { get; }
+        IMsapSupplierRepository MsapSupplier { get; }
+        IMsapSupplierRepository Supplier { get; }
+        IMsapCustomerRepository MsapCustomer { get; }
+        IMsapCustomerRepository Customer { get; }
+        IMsapAuditTrailRepository AuditTrail { get; }
+        IMsapTermsRepository Terms { get; }
 
         Task<List<SelectListItem>> GetCustomerListAsyncById(CancellationToken cancellationToken = default);
 
@@ -155,7 +158,9 @@ namespace IBS.DataAccess.Repository.IRepository
 
         #region --Master File
 
-        IBankAccountRepository MsapBankAccount { get; }
+        IMsapBankAccountRepository MsapBankAccount { get; }
+        IMsapBankAccountRepository BankAccount { get; }
+        IMsapEmployeeRepository Employee { get; }
 
         #endregion
 
@@ -167,18 +172,27 @@ namespace IBS.DataAccess.Repository.IRepository
         IDispatchTicketRepository MsapDispatchTicket { get; }
         IBillingRepository MsapBilling { get; }
         ICollectionRepository MsapCollection { get; }
-        IReportRepository MsapReport { get; }
-        IServiceRepository MsapService { get; }
+        IBS.DataAccess.Repository.Msap.IRepository.IReportRepository MsapReport { get; }
+        IBS.DataAccess.Repository.Msap.IRepository.IServiceRepository MsapService { get; }
         ITariffTableRepository TariffTable { get; }
         IPortRepository MsapPort { get; }
+        IPortRepository Port { get; }
         IPrincipalRepository MsapPrincipal { get; }
+        IPrincipalRepository Principal { get; }
         ITerminalRepository MsapTerminal { get; }
+        ITerminalRepository Terminal { get; }
         ITugboatRepository MsapTugboat { get; }
+        ITugboatRepository Tugboat { get; }
         ITugMasterRepository MsapTugMaster { get; }
+        ITugMasterRepository TugMaster { get; }
         ITugboatOwnerRepository MsapTugboatOwner { get; }
+        ITugboatOwnerRepository TugboatOwner { get; }
         IUserAccessRepository MsapUserAccess { get; }
+        IUserAccessRepository UserAccess { get; }
         IVesselRepository MsapVessel { get; }
+        IVesselRepository Vessel { get; }
         IVesselScheduleRepository MsapVesselSchedule { get; }
+        IVesselScheduleRepository VesselSchedule { get; }
 
         #endregion
 

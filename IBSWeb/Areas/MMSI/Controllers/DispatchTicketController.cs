@@ -545,7 +545,7 @@ namespace IBSWeb.Areas.MMSI.Controllers
             model.EditedBy = User.Identity?.Name ?? "System";
             model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-            await unitOfWork.AuditTrail.AddAsync(new FilprideAuditTrail(model.EditedBy, $"{activity} for {docType} #{model.DispatchNumber}", docType), cancellationToken);
+            await unitOfWork.AuditTrail.AddAsync(new MsapAuditTrail(model.EditedBy, $"{activity} for {docType} #{model.DispatchNumber}", docType), cancellationToken);
             await unitOfWork.SaveAsync(cancellationToken);
 
             return Json(new { success = true, message = successMessage });

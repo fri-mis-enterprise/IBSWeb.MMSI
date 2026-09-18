@@ -1,6 +1,5 @@
 using IBS.Models;
 using IBS.Services.AccessControl;
-using Markdig;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -31,9 +30,6 @@ public class DocsController(
     ];
 
     private readonly string _docsRoot = Path.GetFullPath(Path.Combine(env.ContentRootPath, "..", "Docs", "manual"));
-    private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
-        .UseAdvancedExtensions()
-        .Build();
 
     [HttpGet("")]
     public async Task<IActionResult> Index()
@@ -96,7 +92,7 @@ public class DocsController(
         }
 
         var markdown = System.IO.File.ReadAllText(filePath);
-        return Markdown.ToHtml(markdown, _pipeline);
+        return System.Net.WebUtility.HtmlEncode(markdown).Replace("\r\n", "<br>").Replace("\n", "<br>");
     }
 
     private static string GetTitleFromFile(string slug)

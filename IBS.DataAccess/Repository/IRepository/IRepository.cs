@@ -19,6 +19,7 @@ namespace IBS.DataAccess.Repository.IRepository
         Task RemoveRecords<TEntity>(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default) where TEntity : class;
 
         bool IsJournalEntriesBalanced(IEnumerable<FilprideGeneralLedgerBook> journals);
+        bool IsJournalEntriesBalanced(IEnumerable<IBS.Models.Books.GeneralLedgerBook> journals);
 
         (string AccountNo, string AccountTitle) GetSalesAccountTitle(string productCode);
 
@@ -51,5 +52,12 @@ namespace IBS.DataAccess.Repository.IRepository
         Task<DateOnly> ComputeDueDateAsync(string terms, DateOnly transactionDate, CancellationToken cancellationToken = default);
 
         IQueryable<T> GetAllQuery(Expression<Func<T, bool>>? filter = null);
+
+        async Task<(IEnumerable<T> Items, int Total)> GetPagedAsync(Expression<Func<T, bool>>? filter, string? sortColumn, string sortDirection, int skip, int take, CancellationToken cancellationToken = default)
+        {
+            var rows = (await GetAllAsync(filter, cancellationToken)).ToList();
+            var total = rows.Count;
+            return (take < 0 ? rows.Skip(skip) : rows.Skip(skip).Take(take), total);
+        }
     }
 }

@@ -12,7 +12,7 @@ namespace IBS.Services.MSAP
         IUnitOfWork unitOfWork,
         UserManager<ApplicationUser> userManager,
         ILogger<UserAccessService> logger)
-        : IUserAccessService
+        : MSAP_IUserAccessService
     {
         public async Task<bool> CheckAccess(string id, ProcedureEnum procedure, CancellationToken cancellationToken = default)
         {

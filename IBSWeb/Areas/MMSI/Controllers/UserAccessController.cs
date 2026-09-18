@@ -1,6 +1,7 @@
 using IBS.Models;
 using IBS.Models.MSAP.MasterFile;
 using IBS.Services;
+using IBS.Services.MSAP;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,7 @@ namespace IBSWeb.Areas.MMSI.Controllers
     [Area("User")]
     [Authorize(Roles = "Admin")]
     public class UserAccessController(
-        IUserAccessService userAccessService,
+        MSAP_IUserAccessService userAccessService,
         UserManager<ApplicationUser> userManager)
         : Controller
     {

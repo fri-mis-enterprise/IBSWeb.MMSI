@@ -69,6 +69,12 @@ namespace IBS.DataAccess.Repository
             }
         }
 
+        public bool IsJournalEntriesBalanced(IEnumerable<IBS.Models.Books.GeneralLedgerBook> journals)
+        {
+            return Math.Round(journals.Sum(j => j.Debit), 2, MidpointRounding.AwayFromZero) ==
+                   Math.Round(journals.Sum(j => j.Credit), 2, MidpointRounding.AwayFromZero);
+        }
+
         public async Task RemoveAsync(T entity, CancellationToken cancellationToken = default)
         {
             dbSet.Remove(entity);

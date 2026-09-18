@@ -92,6 +92,11 @@ namespace IBS.DataAccess.Data
         public DbSet<Product> Products { get; set; }
 
         public DbSet<Customer> Customers { get; set; }
+        public DbSet<Supplier> Suppliers => Set<Supplier>();
+        public DbSet<ChartOfAccount> ChartOfAccounts => Set<ChartOfAccount>();
+        public DbSet<BankAccount> MsapBankAccounts => Set<BankAccount>();
+        public DbSet<ChartOfAccount> MsapChartOfAccounts => Set<ChartOfAccount>();
+        public DbSet<Terms> Terms => Set<Terms>();
 
         public DbSet<Service> MsapServices { get; set; }
         public DbSet<TugboatOwner> MsapTugboatOwners { get; set; }
