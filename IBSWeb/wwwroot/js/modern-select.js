@@ -1,0 +1,337 @@
+/**
+ * ModernSelect Component
+ * High-performance, searchable replacement for standard HTML selects.
+ * Features: Fixed positioning, auto-flipping, and mutation observers.
+ */
+const ModernSelect = {
+    init: function(selector) {
+        $(selector).each(function() {
+            ModernSelect.create($(this));
+        });
+    },
+
+    create: function($select) {
+        if ($select.data('modern-select-initialized')) return;
+        
+        const placeholder = $select.data('placeholder') || 'Select an option...';
+        const isSearchable = $select.data('searchable') !== false;
+        
+        // Hide original select
+        $select.hide();
+        
+        // Create modern select structure
+        const selectId = $select.attr('id') || $select.attr('name') || '';
+        const testId = $select.attr('data-testid') || (selectId ? `select-${selectId}` : '');
+        const triggerTestId = testId ? `${testId}-trigger` : '';
+        const testIdAttr = triggerTestId ? `data-testid="${triggerTestId}"` : '';
+
+        const $container = $('<div class="modern-select-container"></div>');
+        const $trigger = $(`
+            <div class="modern-select-trigger" ${testIdAttr} tabindex="0">
+                <span class="selected-text">${placeholder}</span>
+                <span class="material-symbols-outlined">expand_more</span>
+            </div>
+        `);
+        
+        const $dropdown = $('<div class="modern-select-dropdown"></div>');
+        
+        // Append dropdown to body to avoid container clipping
+        $('body').append($dropdown);
+        
+        if (isSearchable) {
+            const $search = $(`
+                <div class="modern-select-search">
+                    <span class="material-symbols-outlined">search</span>
+                    <input type="text" placeholder="Search...">
+                </div>
+            `);
+            $dropdown.append($search);
+        }
+        
+        const $optionsContainer = $('<div class="modern-select-options"></div>');
+        const $noResults = $('<div class="modern-select-no-results">No results found</div>');
+        
+        $dropdown.append($optionsContainer).append($noResults);
+        $container.append($trigger);
+        $select.after($container);
+        
+        // Initial population
+        ModernSelect.populate($select, $optionsContainer, $trigger, placeholder);
+        
+        // Helper to position dropdown
+        const positionDropdown = () => {
+            const rect = $trigger[0].getBoundingClientRect();
+            $dropdown.css({
+                'position': 'fixed',
+                'top': (rect.bottom + 4) + 'px',
+                'left': rect.left + 'px',
+                'width': rect.width + 'px',
+                'z-index': '9999'
+            });
+
+            // Flip up if hitting bottom of viewport
+            const menuHeight = $dropdown.outerHeight();
+            if (rect.bottom + menuHeight > window.innerHeight) {
+                $dropdown.css('top', (rect.top - menuHeight - 4) + 'px');
+            }
+        };
+
+        // Event Listeners
+        let focusOpened = false;
+
+        $trigger.on('focus', function() {
+            if (!$dropdown.hasClass('show')) {
+                $('.modern-select-dropdown').not($dropdown).removeClass('show');
+                $('.modern-select-trigger').not($trigger).removeClass('active');
+                $trigger.addClass('active');
+                $dropdown.addClass('show');
+                focusOpened = true;
+                positionDropdown();
+                
+                if (isSearchable) {
+                    setTimeout(() => {
+                        const $input = $dropdown.find('input');
+                        $input.val('').trigger('input');
+                        if (!('ontouchstart' in window)) $input.focus();
+                    }, 10);
+                }
+            }
+        });
+
+        $trigger.on('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (focusOpened) {
+                focusOpened = false;
+                return;
+            }
+
+            const isOpen = $dropdown.hasClass('show');
+            
+            $('.modern-select-dropdown').not($dropdown).removeClass('show');
+            $('.modern-select-trigger').not($trigger).removeClass('active');
+            
+            if (!isOpen) {
+                $trigger.addClass('active');
+                $dropdown.addClass('show');
+                positionDropdown();
+                
+                if (isSearchable) {
+                    setTimeout(() => {
+                        const $input = $dropdown.find('input');
+                        $input.val('').trigger('input');
+                        if (!('ontouchstart' in window)) $input.focus();
+                    }, 10);
+                }
+            } else {
+                $trigger.removeClass('active');
+                $dropdown.removeClass('show');
+            }
+        });
+        
+        const selectOption = ($opt) => {
+            const val = $opt.data('value');
+            const text = $opt.text();
+            
+            // Find next visible focusable element in DOM order after the trigger
+            const findNextFocusable = () => {
+                const sel = 'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+                const all = document.querySelectorAll(sel);
+                let past = false;
+                for (const el of all) {
+                    if (past && el.offsetParent !== null) return el;
+                    if (el === $trigger[0]) past = true;
+                }
+                return null;
+            };
+            const nextEl = findNextFocusable();
+
+            $select.val(val).trigger('change');
+            $trigger.find('.selected-text').text(text);
+            $dropdown.removeClass('show');
+            $trigger.removeClass('active');
+            
+            $optionsContainer.find('.modern-select-option').removeClass('selected');
+            $opt.addClass('selected');
+
+            if (nextEl) {
+                setTimeout(() => { try { nextEl.focus(); } catch(e) {} }, 0);
+            }
+        };
+
+        $dropdown.on('click', '.modern-select-option', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectOption($(this));
+        });
+
+        $dropdown.on('click', function(e) { e.stopPropagation(); });
+        
+        if (isSearchable) {
+            const $input = $dropdown.find('input');
+
+            $input.on('input', function() {
+                const term = $(this).val().toLowerCase();
+                let hasResults = false;
+                
+                $optionsContainer.find('.modern-select-option').each(function() {
+                    const text = $(this).text().toLowerCase();
+                    if (text.includes(term)) {
+                        $(this).removeClass('hidden');
+                        hasResults = true;
+                    } else {
+                        $(this).addClass('hidden');
+                    }
+                });
+                
+                $noResults.toggle(!hasResults);
+
+                // Clear any manual keyboard highlight when user types
+                $optionsContainer.find('.modern-select-option.highlighted').removeClass('highlighted');
+
+                // Auto-highlight first visible option
+                const $firstVisible = $optionsContainer.find('.modern-select-option:not(.hidden):first');
+                if ($firstVisible.length) { $firstVisible.addClass('highlighted'); }
+            });
+
+            // Keyboard navigation (Arrow Up/Down, Enter/Space/Tab to select)
+            $input.on('keydown', function(e) {
+                const $visibleOptions = $optionsContainer.find('.modern-select-option:not(.hidden)');
+                
+                const scrollIntoView = ($opt) => {
+                    const container = $optionsContainer[0];
+                    const opt = $opt[0];
+                    if (opt.offsetTop < container.scrollTop) {
+                        container.scrollTop = opt.offsetTop;
+                    } else if (opt.offsetTop + opt.offsetHeight > container.scrollTop + container.clientHeight) {
+                        container.scrollTop = opt.offsetTop + opt.offsetHeight - container.clientHeight;
+                    }
+                };
+
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if ($visibleOptions.length === 0) return;
+
+                    const $current = $optionsContainer.find('.modern-select-option.highlighted');
+                    let nextIndex;
+
+                    if ($current.length) {
+                        const currentIndex = $visibleOptions.index($current);
+                        nextIndex = e.key === 'ArrowDown'
+                            ? Math.min(currentIndex + 1, $visibleOptions.length - 1)
+                            : Math.max(currentIndex - 1, 0);
+                        $current.removeClass('highlighted');
+                    } else {
+                        nextIndex = e.key === 'ArrowDown' ? 0 : $visibleOptions.length - 1;
+                    }
+
+                    const $next = $visibleOptions.eq(nextIndex);
+                    $next.addClass('highlighted');
+                    scrollIntoView($next);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const $highlighted = $optionsContainer.find('.modern-select-option.highlighted');
+                    if ($highlighted.length) {
+                        selectOption($highlighted);
+                    } else if ($visibleOptions.length === 1) {
+                        selectOption($visibleOptions.first());
+                    }
+                } else if (e.key === 'Tab') {
+                    const $highlighted = $optionsContainer.find('.modern-select-option.highlighted');
+                    if ($highlighted.length) {
+                        e.preventDefault();
+                        selectOption($highlighted);
+                    }
+                    // otherwise let default Tab move focus naturally
+                } else if (e.key === 'Escape') {
+                    $dropdown.removeClass('show');
+                    $trigger.removeClass('active');
+                    $trigger.focus();
+                }
+            });
+
+            // Clear highlighted class when mouse moves to prevent dual highlight
+            $optionsContainer.on('mouseenter', '.modern-select-option', function() {
+                $optionsContainer.find('.modern-select-option.highlighted').removeClass('highlighted');
+            });
+        }
+        
+        // Sync back if select changes externally (e.g., cascading)
+        $select.on('change', function() {
+            const val = $select.val();
+            const $selectedOption = $optionsContainer.find(`.modern-select-option[data-value="${val}"]`);
+            
+            if ($selectedOption.length) {
+                $trigger.find('.selected-text').text($selectedOption.text());
+                $optionsContainer.find('.modern-select-option').removeClass('selected');
+                $selectedOption.addClass('selected');
+            } else if (!val) {
+                $trigger.find('.selected-text').text(placeholder);
+                $optionsContainer.find('.modern-select-option').removeClass('selected');
+            }
+            // sync validation state to trigger element
+            $trigger.toggleClass('is-invalid', $select.prop('required') && !val);
+        });
+
+        // Close on scroll to avoid disconnected dropdown
+        $(window).on('scroll.modernSelect', function() {
+            $('.modern-select-dropdown').removeClass('show');
+            $('.modern-select-trigger').removeClass('active');
+        });
+
+        // Watch for mutations (if options are added dynamically)
+        const observer = new MutationObserver(() => {
+            ModernSelect.populate($select, $optionsContainer, $trigger, placeholder);
+        });
+        observer.observe($select[0], { childList: true });
+        
+        $select.data('modern-select-initialized', true);
+        $select.data('modern-select-trigger', $trigger);
+        $select.data('modern-select-options', $optionsContainer);
+        $select.data('modern-select-placeholder', placeholder);
+    },
+
+    populate: function($select, $optionsContainer, $trigger, placeholder) {
+        $optionsContainer.empty();
+        const currentVal = $select.val();
+        let foundSelected = false;
+
+        $select.find('option').each(function() {
+            const val = $(this).val();
+            const text = $(this).text();
+            if (!val && !text.includes('--')) return; // Skip empty placeholder options if they aren't explicit
+            
+            const isSelected = val == currentVal;
+            const $opt = $(`<div class="modern-select-option ${isSelected ? 'selected' : ''}" data-value="${val}">${text}</div>`);
+            $optionsContainer.append($opt);
+            
+            if (isSelected) {
+                $trigger.find('.selected-text').text(text);
+                foundSelected = true;
+            }
+        });
+
+        if (!foundSelected) {
+            $trigger.find('.selected-text').text(placeholder);
+        }
+    }
+};
+
+window.refreshModernSelect = function ($select) {
+    var $options = $select.data('modern-select-options');
+    var $trigger = $select.data('modern-select-trigger');
+    var placeholder = $select.data('modern-select-placeholder');
+    if ($options && $trigger) {
+        ModernSelect.populate($select, $options, $trigger, placeholder);
+    }
+};
+
+$(document).on('click', function() {
+    $('.modern-select-dropdown').removeClass('show');
+    $('.modern-select-trigger').removeClass('active');
+});
+
+$(document).ready(function () {
+    ModernSelect.init('.js-modern-select');
+});
