@@ -1,5 +1,4 @@
 # Changelog
-
 All notable changes to this project will be documented in this file.
 
 The format of this file follows **Keep a Changelog**  
@@ -7,10 +6,16 @@ and this project adheres to **Semantic Versioning (SemVer)**.
 
 ---
 
-## [v1.0.0] - 2025-11-28
+## [v1.1.0] - 2026-10-06
 
 ### Added
+- Added company-owned tugboat tagging to non-trade check voucher invoice accounting entries in the create and edit workflows.
+- Added EF Core registration and a database migration for MSAP tugboat and tugboat owner master data.
 
+---
+
+## [v1.0.0] - 2025-11-28
+### Added
 - Initial implementation of **IBSWeb – Integrated Business System**.
 - Added **N-Tier architecture** structure:
     - `IBS.DataAccess` for repositories and Unit of Work
@@ -30,20 +35,12 @@ and this project adheres to **Semantic Versioning (SemVer)**.
 - Added initial documentation structure (README, repository organization).
 
 ### Changed
-
 - Refactored repository methods to use **async/await** and cleaner LINQ.
 - Improved data validation and error handling across the project.
 - Updated folder naming and namespace conventions for consistency.
 
 ### Fixed
-
 - Fixed issues in Chart of Accounts sorting and retrieval.
 - Fixed session retrieval inconsistencies on user login.
 - Fixed bugs in DataTables initialization and hidden column searching.
 - Fixed authentication redirect issues in restricted pages.
-
----
-
-## [Unreleased]
-
-
