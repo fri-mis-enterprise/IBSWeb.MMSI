@@ -78,6 +78,18 @@ namespace IBS.Services
                         .FirstOrDefaultAsync(cancellationToken);
                     return company;
 
+                case SubAccountType.Tugboat:
+                    var tugboat = await _context.MsapTugboats
+                        .Where(t => t.TugboatId == subAccountId && t.IsCompanyOwned)
+                        .Select(t => new SubAccountInfoDto
+                        {
+                            Type = SubAccountType.Tugboat,
+                            Id = t.TugboatId,
+                            Name = t.TugboatName
+                        })
+                        .FirstOrDefaultAsync(cancellationToken);
+                    return tugboat;
+
                 default:
                     return null;
             }
@@ -97,6 +109,8 @@ namespace IBS.Services
                     .AnyAsync(b => b.BankAccountId == subAccountId, cancellationToken),
                 SubAccountType.Company => await _context.Companies
                     .AnyAsync(c => c.CompanyId == subAccountId, cancellationToken),
+                SubAccountType.Tugboat => await _context.MsapTugboats
+                    .AnyAsync(t => t.TugboatId == subAccountId && t.IsCompanyOwned, cancellationToken),
                 _ => false
             };
         }
