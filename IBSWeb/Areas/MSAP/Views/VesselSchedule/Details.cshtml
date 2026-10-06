@@ -1,0 +1,55 @@
+@model VesselSchedule
+@{
+    ViewData["Title"] = "Schedule Details";
+    ViewData["IsFullWidth"] = true;
+    var closed = Model.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled;
+    var tugs = (List<string>)ViewBag.AssignedTugboats;
+}
+<link rel="stylesheet" href="~/msap/css/vessel-schedule.css" asp-append-version="true" />
+<div class="modern-layout">
+    <main class="modern-container schedule-workspace">
+        <div class="flex-stack">
+            <div><span class="modern-label">Vessel Schedule · #@Model.VesselScheduleId</span><h1 class="modern-headline-lg">@Model.Vessel.VesselName</h1><p class="schedule-muted">All times are Philippine time.</p></div>
+            <div class="schedule-actions">
+                <a asp-action="Day" asp-route-date="@Model.PlannedStart.ToString("yyyy-MM-dd")" class="modern-btn-secondary"><span class="material-symbols-outlined">arrow_back</span> Daily schedules</a>
+                @if (!closed) { <a asp-action="Edit" asp-route-id="@Model.VesselScheduleId" class="modern-btn-primary"><span class="material-symbols-outlined">edit</span> Edit / change status</a> }
+            </div>
+        </div>
+        <div class="modern-card schedule-record">
+            <div class="schedule-toolbar"><h2>Booking details</h2><span class="schedule-status" data-status="@Model.Status">@Model.Status</span></div>
+            @if (closed) { <p class="schedule-muted">This schedule is read-only.</p> }
+            <dl>
+                <dt>Location</dt><dd>@Model.Port.PortName / @Model.Terminal.TerminalName</dd>
+                <dt>Voyage</dt><dd>@(Model.VoyageNumber ?? "—") · @(Model.VesselType ?? "—")</dd>
+                <dt>Planned start</dt><dd>@Model.PlannedStart.ToString("MMM d, yyyy · HH:mm")</dd>
+                <dt>Planned end</dt><dd>@Model.PlannedEnd.ToString("MMM d, yyyy · HH:mm")</dd>
+                <dt>Duration</dt><dd>@((Model.PlannedEnd - Model.PlannedStart).TotalHours.ToString("0.##")) hours</dd>
+                <dt>Tug coverage</dt><dd>@tugs.Count assigned / @Model.RequiredTugCount required</dd>
+                <dt>Assigned tugs</dt><dd>@(tugs.Count == 0 ? "Not assigned yet" : string.Join(", ", tugs))</dd>
+                <dt>Created</dt><dd>@Model.CreatedDate.ToString("MMM d, yyyy HH:mm") by @Model.CreatedBy</dd>
+                @if (Model.EditedDate.HasValue) { <dt>Last edited</dt><dd>@Model.EditedDate.Value.ToString("MMM d, yyyy HH:mm") by @Model.EditedBy</dd> }
+            </dl>
+            @if (!string.IsNullOrWhiteSpace(Model.Notes)) { <h2>Notes</h2><p class="schedule-note">@Model.Notes</p> }
+        </div>
+        @if (Model.Status == MsapConstants.VesselScheduleStatus.Tentative)
+        {
+            <div class="modern-card schedule-record">
+                <h2>Remove a tentative plan</h2>
+                <p class="schedule-muted">Delete an entry made by mistake. For confirmed or started plans, use Cancelled to retain the record.</p>
+                <form asp-action="Delete" method="post" id="deleteSchedule">
+                    <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                    <button type="button" id="deleteScheduleButton" class="modern-btn-error"><span class="material-symbols-outlined">delete</span> Delete tentative schedule</button>
+                </form>
+            </div>
+        }
+    </main>
+</div>
+@section Scripts {
+    <script>
+        document.getElementById('deleteScheduleButton')?.addEventListener('click', function () {
+            const form = document.getElementById('deleteSchedule');
+            ModernAlert.confirm({ title: 'Delete tentative schedule?', text: 'This removes the plan permanently.', icon: 'warning', confirmText: 'Delete schedule' })
+                .then(result => { if (result.isConfirmed) form.submit(); });
+        });
+    </script>
+}

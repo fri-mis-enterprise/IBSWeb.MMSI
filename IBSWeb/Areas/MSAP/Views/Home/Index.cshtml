@@ -1,0 +1,176 @@
+@model DashboardCountViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["IsFullWidth"] = Model.ShowDashboard;
+    var day = Model.UpdatedAt.Date;
+    var dateValue = day.ToString("yyyy-MM-dd");
+    var culture = System.Globalization.CultureInfo.GetCultureInfo("en-PH");
+}
+
+@if (!Model.ShowDashboard)
+{
+    <div class="container text-center my-5">
+        <h1 class="modern-headline-lg">Welcome to MSAP</h1>
+        <p class="text-muted">MMSI Sales and Accounting Program</p>
+        @if (User.Identity?.IsAuthenticated != true)
+        {
+            <a class="modern-btn-primary" asp-area="Identity" asp-page="/Account/Login">Login</a>
+        }
+    </div>
+}
+else
+{
+    <div class="dashboard-workspace">
+        <header class="dashboard-header">
+            <div>
+                <span class="modern-label">MSAP · Daily workspace</span>
+                <h1 class="modern-headline-lg">Dashboard <span>@day.ToString("ddd, MMM d")</span></h1>
+                <p class="dashboard-muted">Updated @Model.UpdatedAt.ToString("h:mm tt") · Philippine time</p>
+            </div>
+            <div class="dashboard-actions">
+                <a asp-action="Index" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">refresh</span> Refresh</a>
+                <a asp-controller="VesselSchedule" asp-action="Create" asp-route-date="@dateValue" class="modern-btn-primary"><span class="material-symbols-outlined" aria-hidden="true">add</span> Schedule</a>
+                @if (Model.CanCreateJobOrder || Model.CanCreateDispatch || Model.CanCreateBilling || Model.CanCreateCollection)
+                {
+                    <details class="dashboard-new">
+                        <summary class="modern-btn-secondary">New document <span class="material-symbols-outlined" aria-hidden="true">expand_more</span></summary>
+                        <div class="dashboard-new-menu">
+                            @if (Model.CanCreateJobOrder) { <a asp-controller="JobOrder" asp-action="Create">Job Order</a> }
+                            @if (Model.CanCreateDispatch) { <a asp-controller="DispatchTicket" asp-action="Create">Dispatch Ticket</a> }
+                            @if (Model.CanCreateBilling) { <a asp-controller="Billing" asp-action="Create">Billing</a> }
+                            @if (Model.CanCreateCollection) { <a asp-controller="Collection" asp-action="Create">Collection</a> }
+                        </div>
+                    </details>
+                }
+            </div>
+        </header>
+
+        @if (Model.DataError != null)
+        {
+            <p class="dashboard-notice" role="alert">@Model.DataError</p>
+        }
+        else if (Model.CanViewDispatch || Model.CanViewBilling)
+        {
+            <section aria-label="Pending work across all dates" class="dashboard-pending">
+                @if (Model.CanViewDispatch)
+                {
+                    @foreach (var status in new[] { MsapConstants.DispatchTicketStatus.ForTariff, MsapConstants.DispatchTicketStatus.ForApproval, MsapConstants.DispatchTicketStatus.ForBilling })
+                    {
+                        <a asp-controller="DispatchTicket" asp-action="Index" asp-route-status="@status" class="dashboard-metric">
+                            <span>@status</span><strong>@Model.DispatchCounts.GetValueOrDefault(status).ToString("N0")</strong>
+                            <small>Pending · all dates <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></small>
+                        </a>
+                    }
+                }
+                @if (Model.CanViewBilling)
+                {
+                    <a asp-controller="Billing" asp-action="Index" asp-route-status="@MsapConstants.BillingStatus.ForPosting" class="dashboard-metric">
+                        <span>For Posting</span><strong>@Model.ForPosting.ToString("N0")</strong>
+                        <small>Pending · all dates <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></small>
+                    </a>
+                }
+            </section>
+        }
+
+        <div class="dashboard-main">
+            <section class="dashboard-panel" aria-labelledby="vessel-heading">
+                <div class="dashboard-panel-heading">
+                    <div><h2 id="vessel-heading"><span class="material-symbols-outlined" aria-hidden="true">directions_boat</span> Today's vessels</h2><p class="dashboard-muted">Planned windows and recorded statuses</p></div>
+                    <div class="dashboard-links">
+                        <a asp-controller="VesselSchedule" asp-action="Day" asp-route-date="@dateValue">Daily agenda</a>
+                        <a asp-controller="VesselSchedule" asp-action="Index" asp-route-month="@day.ToString("yyyy-MM")">Calendar</a>
+                    </div>
+                </div>
+                @if (Model.ScheduleError != null)
+                {
+                    <p class="dashboard-notice" role="alert">@Model.ScheduleError</p>
+                }
+                else
+                {
+                    <div class="dashboard-schedule-summary">
+                        <span><strong>@Model.ScheduleCount</strong> schedules</span>
+                        <span class="@(Model.ConflictingScheduleIds.Count > 0 ? "dashboard-warning" : "")"><strong>@Model.ConflictingScheduleIds.Count</strong> with overlaps</span>
+                        <span class="@(Model.ShortageCount > 0 ? "dashboard-warning" : "")"><strong>@Model.ShortageCount</strong> need tugs</span>
+                    </div>
+                    @if (Model.Schedules.Count == 0)
+                    {
+                        <div class="dashboard-empty"><span class="material-symbols-outlined" aria-hidden="true">event_available</span><p>No vessel schedules for today.</p><a asp-controller="VesselSchedule" asp-action="Create" asp-route-date="@dateValue">Add a schedule</a></div>
+                    }
+                    else
+                    {
+                        <div class="dashboard-table-wrap">
+                            <table class="dashboard-table">
+                                <caption class="visually-hidden">Up to six vessel schedules overlapping today, in Philippine time</caption>
+                                <thead><tr><th scope="col">Planned window</th><th scope="col">Vessel / location</th><th scope="col">Status</th><th scope="col">Tugs</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+                                <tbody>
+                                @foreach (var schedule in Model.Schedules)
+                                {
+                                    var assigned = Model.AssignedTugs[schedule.VesselScheduleId];
+                                    var shortage = schedule.Status != MsapConstants.VesselScheduleStatus.Completed && assigned < schedule.RequiredTugCount;
+                                    var statusClass = schedule.Status switch { MsapConstants.VesselScheduleStatus.InProgress => "is-running", MsapConstants.VesselScheduleStatus.Confirmed => "is-confirmed", MsapConstants.VesselScheduleStatus.Completed => "is-completed", _ => "is-tentative" };
+                                    <tr>
+                                        <td class="dashboard-window"><strong>@schedule.PlannedStart.ToString(schedule.PlannedStart.Date == day ? "HH:mm" : "MMM d HH:mm")</strong><small>to @schedule.PlannedEnd.ToString(schedule.PlannedEnd.Date == day ? "HH:mm" : "MMM d HH:mm")</small>@if (schedule.PlannedStart.Date < day) { <small>Continuing</small> }</td>
+                                        <td><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" class="dashboard-vessel">@schedule.Vessel.VesselName</a><small>@schedule.Port.PortName · @schedule.Terminal.TerminalName</small></td>
+                                        <td><span class="dashboard-status @statusClass">@schedule.Status</span>@if (Model.ConflictingScheduleIds.Contains(schedule.VesselScheduleId)) { <small class="dashboard-warning">Overlap</small> }</td>
+                                        <td><strong class="@(shortage ? "dashboard-warning" : "")">@assigned / @schedule.RequiredTugCount</strong><small>@(shortage ? "Needs tugs" : "Assigned")</small></td>
+                                        <td><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" aria-label="Open @schedule.Vessel.VesselName schedule">Open</a></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="dashboard-panel-footer"><span class="dashboard-muted">Showing @Model.Schedules.Count of @Model.ScheduleCount · active plans first</span><a asp-controller="VesselSchedule" asp-action="Day" asp-route-date="@dateValue">View all schedules <span aria-hidden="true">→</span></a></div>
+                    }
+                }
+            </section>
+
+            <section class="dashboard-panel" aria-labelledby="upcoming-heading">
+                <div class="dashboard-panel-heading"><div><h2 id="upcoming-heading"><span class="material-symbols-outlined" aria-hidden="true">event</span> Upcoming vessels</h2><p class="dashboard-muted">Next 7 days · from now · up to 5 schedules</p></div></div>
+                @if (Model.ScheduleError != null)
+                {
+                    <p class="dashboard-notice" role="alert">@Model.ScheduleError</p>
+                }
+                else if (Model.UpcomingSchedules.Count == 0)
+                {
+                    <div class="dashboard-empty"><p>No upcoming vessel schedules in the next seven days.</p><a asp-controller="VesselSchedule" asp-action="Create">Add a schedule</a></div>
+                }
+                else
+                {
+                    <ul class="dashboard-upcoming">
+                        @foreach (var schedule in Model.UpcomingSchedules)
+                        {
+                            var assigned = Model.AssignedTugs[schedule.VesselScheduleId];
+                            <li><div><span>@schedule.PlannedStart.ToString("ddd, MMM d · HH:mm") <span aria-hidden="true">→</span> @schedule.PlannedEnd.ToString(schedule.PlannedEnd.Date == schedule.PlannedStart.Date ? "HH:mm" : "MMM d HH:mm")</span><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId">@schedule.Vessel.VesselName</a><small>@schedule.Port.PortName · @schedule.Terminal.TerminalName</small><small class="@(assigned < schedule.RequiredTugCount ? "dashboard-warning" : "")">@assigned / @schedule.RequiredTugCount tugs assigned</small></div><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" aria-label="Open @schedule.Vessel.VesselName schedule">Open</a></li>
+                        }
+                    </ul>
+                }
+                <div class="dashboard-panel-footer"><a asp-controller="VesselSchedule" asp-action="Index" asp-route-month="@day.ToString("yyyy-MM")">View calendar <span aria-hidden="true">→</span></a></div>
+            </section>
+        </div>
+
+        @if (Model.CanViewFinance && Model.DataError == null)
+        {
+            <section class="dashboard-panel" aria-labelledby="finance-heading">
+                <div class="dashboard-panel-heading"><div><h2 id="finance-heading"><span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span> Monthly summary <span class="dashboard-muted">@day.ToString("MMMM yyyy")</span></h2></div>@if (Model.CanViewBilling) { <a asp-controller="Billing" asp-action="Index" asp-route-status="@MsapConstants.BillingStatus.ForCollection">For collection</a> }</div>
+                <div class="dashboard-finance">
+                    <div><span>Billed this month</span><strong>@Model.BilledMonth.ToString("C2", culture)</strong><small>Posted bills · @day.ToString("MMM") 1–@day.Day</small></div>
+                    <div><span>Received this month</span><strong>@Model.ReceivedMonth.ToString("C2", culture)</strong><small>Valid receipts · excluding withholding</small></div>
+                    <div><span>Dispatches this month</span>
+                        @if (Model.CanViewDispatch) { <a asp-controller="DispatchTicket" asp-action="Index" asp-route-from="@day.ToString("yyyy-MM-01")" asp-route-to="@dateValue" aria-label="View this month's dispatches"><strong>@Model.DispatchesMonth.ToString("N0")</strong></a> }
+                        else { <strong>@Model.DispatchesMonth.ToString("N0")</strong> }
+                        <small>Valid tickets · @day.ToString("MMM") 1–@day.Day</small>
+                    </div>
+                    <div><span>Vessels served this month</span>
+                        @if (Model.CanViewDispatch) { <a asp-controller="DispatchTicket" asp-action="Index" asp-route-from="@day.ToString("yyyy-MM-01")" asp-route-to="@dateValue" aria-label="View dispatches for this month's vessels"><strong>@Model.VesselsMonth.ToString("N0")</strong></a> }
+                        else { <strong>@Model.VesselsMonth.ToString("N0")</strong> }
+                        <small>Distinct vessels · @day.ToString("MMM") 1–@day.Day</small>
+                    </div>
+                </div>
+            </section>
+        }
+    </div>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/msap/css/modern-dashboard.css" asp-append-version="true" />
+}

@@ -1,0 +1,103 @@
+@model VesselScheduleViewModel
+<link rel="stylesheet" href="~/msap/css/vessel-schedule.css" asp-append-version="true" />
+<div class="modern-layout">
+    <main class="modern-container schedule-workspace">
+        <div class="flex-stack">
+            <div><span class="modern-label">Vessel Schedule</span><h1 class="modern-headline-lg">@ViewData["Title"]</h1>
+                <p class="schedule-muted">Plan the time window, then assign tugboats. All times are Philippine time.</p></div>
+            <a asp-action="Day" asp-route-date="@Model.PlannedStart.ToString("yyyy-MM-dd")" class="modern-btn-secondary"><span class="material-symbols-outlined">arrow_back</span> Daily schedules</a>
+        </div>
+        <form method="post" id="scheduleForm" data-terminals-url="@Url.Action("GetTerminalsByPort")" data-bookings-url="@Url.Action("GetTugboatBookings")" data-details-url="@Url.Action("Details")">
+            @Html.AntiForgeryToken()
+            <input asp-for="VesselScheduleId" type="hidden" />
+            <input type="hidden" id="AllowConflicts" name="AllowConflicts" value="false" />
+            <div id="scheduleSaveErrors" hidden>
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(state => state.Errors))
+                {
+                    <span data-save-error data-conflict="@error.ErrorMessage.StartsWith("Overlapping plans:", StringComparison.Ordinal).ToString().ToLowerInvariant()">@error.ErrorMessage</span>
+                }
+            </div>
+            <noscript><div asp-validation-summary="All" class="text-error mb-3" role="alert"></div></noscript>
+            <div class="modern-grid">
+                <div class="modern-col-6 modern-card">
+                    <div class="modern-card-header-info"><span class="material-symbols-outlined">schedule</span><h2 class="modern-headline-md">Booking details</h2></div>
+                    <div class="modern-card-body">
+                        <label asp-for="VesselId" class="modern-label"></label>
+                        <select asp-for="VesselId" asp-items="Model.Vessels" class="js-modern-select" required><option value="">Select vessel</option></select>
+                        <span asp-validation-for="VesselId" class="text-error text-xs"></span>
+                        <label asp-for="VoyageNumber" class="modern-label mt-3"></label>
+                        <input asp-for="VoyageNumber" class="modern-input" maxlength="50" placeholder="Optional" />
+                        <span asp-validation-for="VoyageNumber" class="text-error text-xs"></span>
+                        <label asp-for="PortId" class="modern-label mt-3"></label>
+                        <select asp-for="PortId" asp-items="Model.Ports" class="js-modern-select" required><option value="">Select port</option></select>
+                        <span asp-validation-for="PortId" class="text-error text-xs"></span>
+                        <label asp-for="TerminalId" class="modern-label mt-3"></label>
+                        <select asp-for="TerminalId" asp-items="Model.Terminals" class="js-modern-select" required><option value="">Select terminal</option></select>
+                        <span asp-validation-for="TerminalId" class="text-error text-xs"></span>
+                        <p id="terminalMessage" class="schedule-muted" role="status"></p>
+                        <label asp-for="PlannedStart" class="modern-label mt-3"></label>
+                        <input asp-for="PlannedStart" type="datetime-local" asp-format="{0:yyyy-MM-ddTHH:mm}" class="modern-input" min="1900-01-01T00:00" max="9998-12-31T23:59" required />
+                        <span asp-validation-for="PlannedStart" class="text-error text-xs"></span>
+                        <label asp-for="PlannedEnd" class="modern-label mt-3"></label>
+                        <input asp-for="PlannedEnd" type="datetime-local" asp-format="{0:yyyy-MM-ddTHH:mm}" class="modern-input" min="1900-01-01T00:00" max="9998-12-31T23:59" required />
+                        <span asp-validation-for="PlannedEnd" class="text-error text-xs"></span>
+                        <label asp-for="Status" class="modern-label mt-3"></label>
+                        <select asp-for="Status" asp-items="Model.Statuses" class="modern-input"></select>
+                        <span asp-validation-for="Status" class="text-error text-xs"></span>
+                        <p class="schedule-muted">Tentative plans can have unassigned tugs. Confirmed and In Progress require full tug coverage. Completed and Cancelled records become read-only.</p>
+                    </div>
+                </div>
+                <div class="modern-col-6 modern-card">
+                    <div class="modern-card-header-info"><span class="material-symbols-outlined">directions_boat</span><h2 class="modern-headline-md">Tugboat assignments</h2></div>
+                    <div class="modern-card-body">
+                        <label asp-for="RequiredTugCount" class="modern-label"></label>
+                        <input asp-for="RequiredTugCount" type="number" min="1" max="10" class="modern-input" required />
+                        <span asp-validation-for="RequiredTugCount" class="text-error text-xs"></span>
+                        <p class="schedule-muted mb-3">Assigned: <strong id="assignedCount">@(Model.SelectedTugboatIds?.Count ?? 0)</strong>. Required count stays separate from assignments.</p>
+                        <span asp-validation-for="SelectedTugboatIds" class="text-error text-xs"></span>
+                        <div id="selectedTugSummary" class="schedule-selected-tugs" aria-label="Selected tugboats"></div>
+                        <div class="schedule-picker-controls">
+                            <label for="tugPickerSearch" class="visually-hidden">Search tug name or number</label>
+                            <input type="search" id="tugPickerSearch" class="modern-input" placeholder="Search tug name or number…" />
+                            <label for="tugPickerScope" class="visually-hidden">Filter tugboats</label>
+                            <select id="tugPickerScope" class="modern-input">
+                                <option value="all">All</option>
+                                <option value="selected">Selected</option>
+                                <option value="unbooked">Unbooked</option>
+                                <option value="attention">Needs attention</option>
+                            </select>
+                        </div>
+                        <button type="button" id="retryTugBookings" class="modern-btn-secondary">Refresh bookings</button>
+                        <p id="tugBookingMessage" class="schedule-muted" role="status" aria-live="polite">Select the planned window to check bookings.</p>
+                        <div class="schedule-tug-list schedule-tug-picker">
+                            @foreach (var tug in Model.Tugboats)
+                            {
+                                <div class="schedule-tug-option" data-tug-option data-name="@tug.Text" data-state="unknown">
+                                    <label class="schedule-tug-choice">
+                                        <input type="checkbox" name="SelectedTugboatIds" value="@tug.Value" checked="@(Model.SelectedTugboatIds?.Contains(int.Parse(tug.Value)) == true)" />
+                                        <span class="schedule-tug-name">@tug.Text</span>
+                                        <small class="schedule-tug-booking-state">Not checked</small>
+                                    </label>
+                                    <details class="schedule-picker-bookings" hidden>
+                                        <summary>Overlapping bookings</summary>
+                                        <div></div>
+                                    </details>
+                                </div>
+                            }
+                        </div>
+                        <p id="noPickerTugs" class="schedule-muted" hidden>No tugboats match this view.</p>
+                        <small class="schedule-muted">Unbooked means no overlapping schedule in this window. Check operational availability before assigning.</small>
+                        @if (Model.Tugboats.Count == 0) { <p class="schedule-muted">No tugboats are registered. You can save a tentative plan.</p> }
+                        <label asp-for="Notes" class="modern-label mt-3"></label>
+                        <textarea asp-for="Notes" class="modern-input" rows="4" placeholder="Planning instructions or remarks"></textarea>
+                        <p class="schedule-muted">Overlaps are checked on save and require two confirmations to proceed. Terminal warnings refer to the whole terminal, not individual berths.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="schedule-actions mt-3">
+                <button type="submit" class="modern-btn-primary"><span class="material-symbols-outlined">save</span> Save schedule</button>
+                <a asp-action="Day" asp-route-date="@Model.PlannedStart.ToString("yyyy-MM-dd")" class="modern-btn-secondary">Back to day</a>
+            </div>
+        </form>
+    </main>
+</div>

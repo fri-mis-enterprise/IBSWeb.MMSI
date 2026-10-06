@@ -1,0 +1,240 @@
+using IBS.DataAccess.MSAP.Repository.IRepository;
+using IBS.Models.MSAP;
+using IBS.Utility.MSAP.Constants;
+using IBS.Utility.MSAP.Helpers;
+using Microsoft.Extensions.Logging;
+using System.Text.Json;
+
+namespace IBS.Services.MSAP
+{
+    public class VesselScheduleService(
+        IUnitOfWork unitOfWork,
+        ILogger<VesselScheduleService> logger) : IVesselScheduleService
+    {
+        public async Task<ServiceResult<int>> CreateAsync(VesselSchedule model, string username, CancellationToken ct = default, bool allowConflicts = false)
+        {
+            try
+            {
+                var error = await ValidateAsync(model, allowConflicts, ct);
+                if (error != null) return ServiceResult<int>.Failure(error, ServiceResultStatus.ValidationError);
+
+                model.CreatedBy = username;
+                model.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
+
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
+                {
+                    await unitOfWork.VesselSchedule.AddAsync(model, ct);
+                    await unitOfWork.SaveAsync(ct);
+                    await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username,
+                        $"Created vessel schedule #{model.VesselScheduleId} ({model.Status}, {model.PlannedStart:MM/dd HH:mm} – {model.PlannedEnd:MM/dd HH:mm}). Overlap override: {allowConflicts}",
+                        "Vessel Schedule", model.VesselScheduleId), ct);
+                    await unitOfWork.SaveAsync(ct);
+                }, ct);
+
+                return ServiceResult<int>.Success(model.VesselScheduleId, "Schedule created successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to create vessel schedule");
+                return ServiceResult<int>.Failure("Failed to create schedule. Please try again.");
+            }
+        }
+
+        public async Task<ServiceResult> UpdateAsync(VesselSchedule model, string username, CancellationToken ct = default, bool allowConflicts = false)
+        {
+            try
+            {
+                var existing = await unitOfWork.VesselSchedule.GetAsync(s => s.VesselScheduleId == model.VesselScheduleId, ct);
+                if (existing == null)
+                {
+                    return ServiceResult.Failure("Schedule not found.", ServiceResultStatus.NotFound);
+                }
+
+                if (existing.Status == MsapConstants.VesselScheduleStatus.Completed || existing.Status == MsapConstants.VesselScheduleStatus.Cancelled)
+                {
+                    return ServiceResult.Failure("Cannot edit a completed or cancelled schedule.", ServiceResultStatus.ValidationError);
+                }
+
+                var error = await ValidateAsync(model, allowConflicts, ct);
+                if (error != null) return ServiceResult.Failure(error, ServiceResultStatus.ValidationError);
+                var previousStatus = existing.Status;
+
+                existing.VesselId = model.VesselId;
+                existing.PortId = model.PortId;
+                existing.TerminalId = model.TerminalId;
+                existing.PlannedStart = model.PlannedStart;
+                existing.PlannedEnd = model.PlannedEnd;
+                existing.RequiredTugCount = model.RequiredTugCount;
+                existing.AssignedTugboatIds = model.AssignedTugboatIds;
+                existing.VoyageNumber = model.VoyageNumber;
+                existing.VesselType = model.VesselType;
+                existing.Status = model.Status;
+                existing.Notes = model.Notes;
+                existing.EditedBy = username;
+                existing.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+
+                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Updated vessel schedule #{model.VesselScheduleId} ({previousStatus} → {model.Status}). Overlap override: {allowConflicts}", "Vessel Schedule", model.VesselScheduleId), ct);
+                await unitOfWork.SaveAsync(ct);
+
+                return ServiceResult.Success("Schedule updated successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to update vessel schedule {Id}", model.VesselScheduleId);
+                return ServiceResult.Failure("Failed to update schedule. Please try again.");
+            }
+        }
+
+        public async Task<ServiceResult> DeleteAsync(int id, string username, CancellationToken ct = default)
+        {
+            try
+            {
+                var existing = await unitOfWork.VesselSchedule.GetAsync(s => s.VesselScheduleId == id, ct);
+                if (existing == null)
+                {
+                    return ServiceResult.Failure("Schedule not found.", ServiceResultStatus.NotFound);
+                }
+
+                if (existing.Status != MsapConstants.VesselScheduleStatus.Tentative)
+                    return ServiceResult.Failure("Only tentative schedules can be deleted. Cancel an active schedule to retain its history.", ServiceResultStatus.ValidationError);
+                await unitOfWork.VesselSchedule.RemoveAsync(existing, ct);
+                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Deleted vessel schedule #{id}", "Vessel Schedule", id), ct);
+                await unitOfWork.SaveAsync(ct);
+
+                return ServiceResult.Success("Schedule deleted successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to delete vessel schedule {Id}", id);
+                return ServiceResult.Failure("Failed to delete schedule. Please try again.");
+            }
+        }
+
+        public async Task<VesselSchedule?> GetByIdAsync(int id, CancellationToken ct = default)
+        {
+            return await unitOfWork.VesselSchedule.GetAsync(s => s.VesselScheduleId == id, ct);
+        }
+
+        public async Task<IEnumerable<VesselSchedule>> GetSchedulesAsync(DateTime? from, DateTime? to, CancellationToken ct = default)
+        {
+            return await unitOfWork.VesselSchedule.GetSchedulesWithDetailsAsync(from, to, ct);
+        }
+
+        private async Task<string?> ValidateAsync(VesselSchedule model, bool allowConflicts, CancellationToken ct)
+        {
+            if (model.PlannedStart.Year < 1900 || model.PlannedEnd.Year > 9998 || model.PlannedEnd <= model.PlannedStart)
+                return "Use dates between 1900 and 9998, with planned end after planned start.";
+            if (model.Status is not (MsapConstants.VesselScheduleStatus.Tentative or MsapConstants.VesselScheduleStatus.Confirmed
+                or MsapConstants.VesselScheduleStatus.InProgress or MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled))
+                return "Choose a valid schedule status.";
+            if (model.RequiredTugCount is < 1 or > 10) return "Required tug count must be between 1 and 10.";
+            var vessel = await unitOfWork.Vessel.GetAsync(v => v.VesselId == model.VesselId, ct);
+            if (vessel == null) return "Choose a valid vessel.";
+            var terminal = await unitOfWork.Terminal.GetAsync(t => t.TerminalId == model.TerminalId && t.PortId == model.PortId, ct);
+            if (terminal == null) return "Choose a terminal belonging to the selected port.";
+            model.VesselType = vessel.VesselType == "FOREIGN" ? "Foreign" : "Local";
+            List<int> tugIds;
+            try
+            {
+                tugIds = string.IsNullOrEmpty(model.AssignedTugboatIds)
+                    ? [] : JsonSerializer.Deserialize<List<int>>(model.AssignedTugboatIds) ?? [];
+            }
+            catch (JsonException) { return "Invalid tugboat assignment."; }
+            tugIds = tugIds.Distinct().ToList();
+            var tugs = await unitOfWork.Tugboat.GetAllAsync(t => tugIds.Contains(t.TugboatId), ct);
+            if (tugs.Count() != tugIds.Count) return "Choose valid tugboats.";
+            model.AssignedTugboatIds = tugIds.Count == 0 ? null : JsonSerializer.Serialize(tugIds);
+            if (model.Status == MsapConstants.VesselScheduleStatus.Cancelled) return null;
+            if ((model.Status is MsapConstants.VesselScheduleStatus.Confirmed or MsapConstants.VesselScheduleStatus.InProgress)
+                && tugIds.Count < model.RequiredTugCount)
+                return "Assign the required tugboats before confirming or starting the schedule. Use Tentative while planning.";
+            var conflicts = await CheckConflictsAsync(model, ct);
+            if (conflicts.Count > 0 && !allowConflicts)
+                return "Overlapping plans: " + string.Join(" ", conflicts.Select(c => c.Message))
+                    + " Adjust the booking or review both confirmation alerts to acknowledge and save it.";
+            return null;
+        }
+
+        public async Task<List<ScheduleConflict>> CheckConflictsAsync(VesselSchedule schedule, CancellationToken ct = default,
+            IEnumerable<VesselSchedule>? candidates = null, IReadOnlyDictionary<int, string>? tugboatNames = null)
+        {
+            var conflicts = new List<ScheduleConflict>();
+            if (schedule.Status == MsapConstants.VesselScheduleStatus.Cancelled) return conflicts;
+            var from = schedule.PlannedStart;
+            var to = schedule.PlannedEnd;
+            var allSchedules = candidates ?? await GetSchedulesAsync(from, to, ct);
+            var others = allSchedules.Where(s => s.VesselScheduleId != schedule.VesselScheduleId
+                && s.Status != MsapConstants.VesselScheduleStatus.Cancelled
+                && s.PlannedStart < schedule.PlannedEnd && s.PlannedEnd > schedule.PlannedStart).ToList();
+            foreach (var s in others.Where(s => s.VesselId == schedule.VesselId))
+            {
+                conflicts.Add(new ScheduleConflict
+                {
+                    Type = "Vessel",
+                    Message = $"Vessel '{s.Vessel.VesselName}' already has schedule #{s.VesselScheduleId} ({s.PlannedStart:MMM d HH:mm} – {s.PlannedEnd:MMM d HH:mm}).",
+                    ConflictingScheduleId = s.VesselScheduleId,
+                    ConflictingVessel = s.Vessel.VesselName,
+                    ConflictStart = s.PlannedStart,
+                    ConflictEnd = s.PlannedEnd
+                });
+            }
+
+            // Terminal overlap
+            foreach (var s in others.Where(s =>
+                s.TerminalId == schedule.TerminalId &&
+                s.PlannedStart < schedule.PlannedEnd &&
+                s.PlannedEnd > schedule.PlannedStart))
+            {
+                conflicts.Add(new ScheduleConflict
+                {
+                    Type = "Terminal",
+                    Message = $"Terminal '{s.Terminal.TerminalName}' has an overlapping plan for '{s.Vessel.VesselName}'.",
+                    ConflictingScheduleId = s.VesselScheduleId,
+                    ConflictingVessel = s.Vessel.VesselName,
+                    ConflictStart = s.PlannedStart,
+                    ConflictEnd = s.PlannedEnd
+                });
+            }
+
+            // Tugboat overlap
+            var tugboatIds = string.IsNullOrEmpty(schedule.AssignedTugboatIds)
+                ? new List<int>()
+                : JsonSerializer.Deserialize<List<int>>(schedule.AssignedTugboatIds) ?? new();
+
+            if (tugboatIds.Count > 0)
+            {
+                tugboatNames ??= (await unitOfWork.Tugboat.GetAllAsync(t => tugboatIds.Contains(t.TugboatId), ct))
+                    .ToDictionary(t => t.TugboatId, t => t.TugboatName);
+
+                foreach (var s in others)
+                {
+                    var otherTugIds = string.IsNullOrEmpty(s.AssignedTugboatIds)
+                        ? new List<int>()
+                        : JsonSerializer.Deserialize<List<int>>(s.AssignedTugboatIds) ?? new();
+                    if (otherTugIds.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var shared = tugboatIds.Intersect(otherTugIds).ToList();
+                    if (shared.Count > 0 &&
+                        s.PlannedStart < schedule.PlannedEnd &&
+                        s.PlannedEnd > schedule.PlannedStart)
+                    {
+                        conflicts.Add(new ScheduleConflict
+                        {
+                            Type = "Tugboat",
+                            Message = $"Tugboat(s) '{string.Join(", ", shared.Select(id => tugboatNames.GetValueOrDefault(id, $"#{id}")))}' assigned to '{s.Vessel.VesselName}'.",
+                            ConflictingScheduleId = s.VesselScheduleId,
+                            ConflictingVessel = s.Vessel.VesselName,
+                            ConflictStart = s.PlannedStart,
+                            ConflictEnd = s.PlannedEnd
+                        });
+                    }
+                }
+            }
+
+            return conflicts;
+        }
+    }
+}

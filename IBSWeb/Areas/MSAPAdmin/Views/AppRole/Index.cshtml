@@ -1,0 +1,142 @@
+@{
+    ViewData["Title"] = "Role Management";
+    ViewData["IsFullWidth"] = true;
+}
+
+<div class="modern-layout">
+    <main class="modern-container">
+        <!-- Header Section -->
+        <div class="flex-stack">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="modern-label" style="color: var(--on-surface-variant)">GENERAL</span>
+                    <span class="material-symbols-outlined text-xs">chevron_right</span>
+                    <span class="modern-label" style="color: var(--on-surface)">Role</span>
+                </div>
+                <h1 class="modern-headline-lg">@ViewData["Title"]</h1>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" class="modern-btn-primary" id="openUpsertBtn">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    CREATE NEW ROLE
+                </button>
+            </div>
+        </div>
+
+        <!-- Table Card -->
+        <div class="modern-card">
+            <div class="modern-card-header-action flex justify-between items-center w-full">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">manage_accounts</span>
+                    <h2 class="modern-headline-md">Role List</h2>
+                </div>
+            </div>
+            <div class="modern-card-body">
+                <table class="modern-table" id="paginatedTable">
+                    <thead>
+                    <tr>
+                        <th class="text-start">Name</th>
+                    </tr>
+                    </thead>
+                </table>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ========== CREATE ROLE MODAL ========== -->
+<div class="modal fade" id="upsertModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content modern-card border-0">
+            <div class="modern-card-header-info">
+                <span class="material-symbols-outlined">add_circle</span>
+                <h2 class="modern-headline-md">Create Role</h2>
+                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modern-card-body">
+                <form id="roleForm" class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-1">
+                        <label for="roleName" class="modern-label">Role Name <span class="text-error">*</span></label>
+                        <input type="text" class="modern-input" id="roleName" placeholder="e.g. Supervisor" required />
+                    </div>
+                </form>
+            </div>
+            <div class="modern-sticky-footer mt-0">
+                <div class="flex gap-2">
+                    <button type="button" class="modern-btn-primary" id="saveRoleBtn">
+                        <span class="material-symbols-outlined">save</span>
+                        SAVE ROLE
+                    </button>
+                    <button type="button" class="modern-btn-secondary" data-bs-dismiss="modal">CANCEL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts{
+    <script>
+        let upsertModal;
+        let roleTable;
+
+        $(document).ready(function () {
+            upsertModal = new bootstrap.Modal(document.getElementById('upsertModal'));
+            $('#openUpsertBtn').on('click', openUpsertModal);
+            $('#saveRoleBtn').on('click', saveRole);
+
+            roleTable = $('#paginatedTable').DataTable(ModernTable.config({
+                serverSide: true,
+                ajax: ModernTable.ajax("@Url.Action("GetRolesList", "AppRole", new { area = "MSAPAdmin" })"),
+                columns: [
+                    {
+                        data: "name",
+                        name : "Name",
+                        render: (data) => `<span class="font-bold">${data}</span>`
+                    }
+                ],
+                order: [[0, 'asc']]
+            }));
+        });
+
+        function openUpsertModal() {
+            $('#roleForm')[0].reset();
+            upsertModal.show();
+        }
+
+        function saveRole() {
+            const roleName = $('#roleName').val().trim();
+
+            if (!roleName) {
+                ModernAlert.warning('Role name is required');
+                return;
+            }
+
+            const saveBtn = $('#saveRoleBtn');
+            saveBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
+
+            $.ajax({
+                url: '@Url.Action("Upsert", "AppRole", new { area = "MSAPAdmin" })',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ Name: roleName }),
+                success: function (response) {
+                    saveBtn.prop('disabled', false).html('<i class="bi bi-save"></i> Save Role');
+
+                    if (response.success) {
+                        ModernAlert.success(response.message).then(() => {
+                            upsertModal.hide();
+                            roleTable.ajax.reload(null, false);
+                        });
+                    } else {
+                        ModernAlert.error(response.message);
+                    }
+                },
+                error: function (xhr) {
+                    saveBtn.prop('disabled', false).html('<i class="bi bi-save"></i> Save Role');
+                    const message = xhr.responseJSON?.message || 'An error occurred while saving the role';
+                    ModernAlert.error(message);
+                }
+            });
+        }
+    </script>
+}

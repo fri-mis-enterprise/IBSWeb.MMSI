@@ -1,0 +1,494 @@
+@{
+    ViewData["Title"] = "User Management";
+    ViewData["IsFullWidth"] = true;
+}
+
+<div class="modern-layout">
+    <main class="modern-container">
+        <!-- Header Section -->
+        <div class="flex-stack">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="modern-label" style="color: var(--on-surface-variant)">GENERAL</span>
+                    <span class="material-symbols-outlined text-xs">chevron_right</span>
+                    <span class="modern-label" style="color: var(--on-surface)">User</span>
+                </div>
+                <h1 class="modern-headline-lg">@ViewData["Title"]</h1>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" class="modern-btn-primary" id="openCreateUserBtn">
+                    <span class="material-symbols-outlined">person_add</span>
+                    CREATE NEW USER
+                </button>
+            </div>
+        </div>
+
+        <!-- Table Card -->
+        <div class="modern-card">
+            <div class="modern-card-header-action flex justify-between items-center w-full">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">group</span>
+                    <h2 class="modern-headline-md">User List</h2>
+                </div>
+            </div>
+            <div class="modern-card-body">
+                <table class="modern-table" id="userTable">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Full Name</th>
+                            <th>Department</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Modified</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                </table>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ========== CREATE/EDIT USER MODAL ========== -->
+<div class="modal fade" id="upsertModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content modern-card border-0">
+            <div class="modern-card-header-info">
+                <span class="material-symbols-outlined" id="modalIcon">person_add</span>
+                <h2 class="modern-headline-md" id="modalTitle">Create User</h2>
+                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modern-card-body">
+                <form id="userForm" class="flex flex-col gap-4">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" id="userId" />
+
+                    <div class="modern-grid">
+                        <div class="modern-col-6">
+                            <label for="username" class="modern-label">Username <span class="text-error">*</span></label>
+                            <input type="text" class="modern-input" id="username" required />
+                            <small class="text-xs italic" style="color: var(--on-surface-variant)">Cannot be changed after creation</small>
+                        </div>
+
+                        <div class="modern-col-6">
+                            <label for="name" class="modern-label">Full Name <span class="text-error">*</span></label>
+                            <input type="text" class="modern-input" id="name" oninput="this.value = this.value.toUpperCase()" required />
+                        </div>
+                    </div>
+
+                    <div class="modern-grid">
+                        <div class="modern-col-6">
+                            <label for="department" class="modern-label">Department <span class="text-error">*</span></label>
+                            <select class="modern-input js-modern-select" id="department" data-placeholder="Select department" required>
+                                <option value="">Select department</option>
+                                <option value="Accounting">Accounting</option>
+                                <option value="Credit and Collection">Credit and Collection</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Finance">Finance</option>
+                                <option value="HR and Admin/Legal">HR and Admin/Legal</option>
+                                <option value="Logistics">Logistics</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="Management Accounting">Management Accounting</option>
+                                <option value="MIS">MIS</option>
+                                <option value="Operation">Operation</option>
+                                <option value="RCD">RCD</option>
+                                <option value="Retail Admin">Retail Admin</option>
+                                <option value="Retail Audit">Retail Audit</option>
+                                <option value="Site Dev and Site Acquisition">Site Dev and Site Acquisition</option>
+                                <option value="Station Cashier">Station Cashier</option>
+                                <option value="Trade and Supply">Trade and Supply</option>
+                                <option value="Training and Compliance">Training and Compliance</option>
+                            </select>
+                        </div>
+
+                        <div class="modern-col-6">
+                            <label for="role" class="modern-label">Role <span class="text-error">*</span></label>
+                            <select class="modern-input js-modern-select" id="role" data-placeholder="Select role" required>
+                                <option value="">Select role</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input class="form-check-input" type="checkbox" id="isActive" checked />
+                        <label class="modern-label mb-0 cursor-pointer" for="isActive">
+                            <span id="statusLabel">Active</span>
+                        </label>
+                    </div>
+
+                    <div id="passwordSection" class="border-t border-outline-variant pt-4">
+                        <div class="modern-grid">
+                            <div class="modern-col-6">
+                                <label for="password" class="modern-label">Password <span class="text-error" id="passwordRequired">*</span></label>
+                                <input type="password" class="modern-input" id="password" />
+                            </div>
+
+                            <div class="modern-col-6">
+                                <label for="confirmPassword" class="modern-label">Confirm Password <span class="text-error" id="confirmRequired">*</span></label>
+                                <input type="password" class="modern-input" id="confirmPassword" />
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modern-sticky-footer mt-0">
+                <div class="flex gap-2">
+                    <button type="button" class="modern-btn-primary" id="saveUserBtn">
+                        <span class="material-symbols-outlined">save</span>
+                        SAVE USER
+                    </button>
+                    <button type="button" class="modern-btn-secondary" data-bs-dismiss="modal">CANCEL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== RESET PASSWORD MODAL ========== -->
+<div class="modal fade" id="resetPasswordModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content modern-card border-0">
+            <div class="modern-card-header-info">
+                <span class="material-symbols-outlined">key</span>
+                <h2 class="modern-headline-md">Reset Password</h2>
+                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modern-card-body">
+                <form id="resetPasswordForm" class="flex flex-col gap-4">
+                    <input type="hidden" id="resetUserId" />
+
+                    <div class="flex flex-col gap-1">
+                        <label for="resetUsername" class="modern-label">Username</label>
+                        <input type="text" class="modern-input" id="resetUsername" readonly disabled />
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label for="newPassword" class="modern-label">New Password <span class="text-error">*</span></label>
+                        <input type="password" class="modern-input" id="newPassword" required />
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label for="confirmNewPassword" class="modern-label">Confirm New Password <span class="text-error">*</span></label>
+                        <input type="password" class="modern-input" id="confirmNewPassword" required />
+                    </div>
+                </form>
+            </div>
+            <div class="modern-sticky-footer mt-0">
+                <div class="flex gap-2">
+                    <button type="button" class="modern-btn-primary" id="resetPasswordBtn">
+                        <span class="material-symbols-outlined">key</span>
+                        RESET PASSWORD
+                    </button>
+                    <button type="button" class="modern-btn-secondary" data-bs-dismiss="modal">CANCEL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let userTable;
+        let upsertModal;
+        let resetPasswordModal;
+        let shouldRefreshOnClose = false;
+
+        $(document).ready(function () {
+            upsertModal = new bootstrap.Modal(document.getElementById('upsertModal'));
+            resetPasswordModal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
+            $('#openCreateUserBtn').on('click', openUpsertModal);
+            $('#saveUserBtn').on('click', saveUser);
+            $('#resetPasswordBtn').on('click', resetPassword);
+
+            initializeModernSelect();
+
+            userTable = $('#userTable').DataTable(ModernTable.config({
+                ajax: ModernTable.ajax('/MSAPAdmin/MSAP/GetAll'),
+                columns: [
+                    { data: 'username', render: data => escapeHtml(data) },
+                    { data: 'name', render: data => `<span class="font-bold">${escapeHtml(data)}</span>` },
+                    { data: 'department', render: data => escapeHtml(data) },
+                    { data: 'role', render: data => escapeHtml(data) },
+                    {
+                        data: 'isActive',
+                        render: (data) => data
+                            ? ModernTable.render.badge('Active', 'status-confirmed')
+                            : ModernTable.render.badge('Inactive', 'status-closed')
+                    },
+                    { data: 'createdDate' },
+                    {
+                        data: null,
+                        render: function(data) {
+                            return data.modifiedDate !== 'N/A'
+                                ? `${escapeHtml(data.modifiedDate)}<br/><small class="text-muted">by ${escapeHtml(data.modifiedBy)}</small>`
+                                : 'N/A';
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        className: "text-center",
+                        render: function (data) {
+                            return ModernTable.render.dropdown([
+                                { label: 'Edit User', icon: 'edit', onclick: `openUpsertModal('${data.id}')` },
+                                {
+                                    label: data.isActive ? 'Deactivate User' : 'Activate User',
+                                    icon: data.isActive ? 'block' : 'check_circle',
+                                    onclick: `toggleStatus('${data.id}', '${escapeHtml(data.username)}')`
+                                },
+                                { label: 'Reset Password', icon: 'key', onclick: `openResetPasswordModal('${data.id}', '${escapeHtml(data.username)}')` }
+                            ]);
+                        }
+                    }
+                ],
+                order: [[5, 'desc']]
+            }));
+
+            loadRoles();
+
+            $('#isActive').on('change', function () {
+                $('#statusLabel').text(this.checked ? 'Active' : 'Inactive');
+            });
+
+            $('#upsertModal').on('shown.bs.modal', function () {
+                initializeModernSelect();
+            });
+
+            $('#upsertModal').on('hidden.bs.modal', function () {
+                if (shouldRefreshOnClose) {
+                    userTable.ajax.reload(null, false);
+                    shouldRefreshOnClose = false;
+                }
+            });
+
+            $('#resetPasswordModal').on('hidden.bs.modal', function () {
+                if (shouldRefreshOnClose) {
+                    userTable.ajax.reload(null, false);
+                    shouldRefreshOnClose = false;
+                }
+            });
+        });
+
+        function escapeHtml(text) {
+            if (text == null) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        function initializeModernSelect() {
+            ModernSelect.init('.js-modern-select');
+        }
+
+        function loadRoles() {
+            $.get('/MSAPAdmin/MSAP/GetRoles')
+                .done(function (data) {
+                    const roleSelect = $('#role');
+                    roleSelect.empty().append('<option value="">Select role</option>');
+                    data.forEach(role => {
+                        roleSelect.append(`<option value="${escapeHtml(role.value)}">${escapeHtml(role.text)}</option>`);
+                    });
+                })
+                .fail(function() {
+                    ModernAlert.error('Failed to load roles');
+                });
+        }
+
+        function openUpsertModal(userId = null) {
+            $('#userForm')[0].reset();
+            $('#userId').val('');
+            $('#username').prop('readonly', false);
+            $('#passwordSection').show();
+            $('#password, #confirmPassword').val('').prop('required', true);
+            $('#modalTitle').text('Create User');
+            $('#isActive').prop('checked', true);
+            $('#statusLabel').text('Active');
+            $('#department, #role').val('').trigger('change');
+
+            if (userId && typeof userId === 'string') {
+                $.get(`/MSAPAdmin/MSAP/GetUser?id=${encodeURIComponent(userId)}`)
+                    .done(function (response) {
+                        if (response.success) {
+                            const user = response.data;
+                            $('#userId').val(user.id);
+                            $('#username').val(user.username).prop('readonly', true);
+                            $('#name').val(user.name);
+                            $('#department').val(user.department).trigger('change');
+
+                            setTimeout(() => {
+                                $('#role').val(user.role).trigger('change');
+                            }, 100);
+
+                            $('#isActive').prop('checked', user.isActive);
+                            $('#statusLabel').text(user.isActive ? 'Active' : 'Inactive');
+                            $('#modalTitle').text('Edit User');
+                            $('#passwordSection').hide();
+                            $('#password, #confirmPassword').val('').prop('required', false);
+                        } else {
+                            ModernAlert.error(response.message);
+                        }
+                    })
+                    .fail(function() {
+                        ModernAlert.error('Failed to load user details');
+                    });
+            }
+
+            upsertModal.show();
+        }
+
+        function saveUser() {
+            const userId = $('#userId').val();
+            const username = $('#username').val().trim();
+            const name = $('#name').val().trim();
+            const department = $('#department').val();
+            const role = $('#role').val();
+            const password = $('#password').val();
+            const confirmPassword = $('#confirmPassword').val();
+            const isActive = $('#isActive').is(':checked');
+
+            if (!username || !name || !department || !role) {
+                ModernAlert.warning('Please fill in all required fields');
+                return;
+            }
+
+            if (!userId) {
+                if (!password || password.length < 6) {
+                    ModernAlert.warning('Password must be at least 6 characters');
+                    return;
+                }
+                if (password !== confirmPassword) {
+                    ModernAlert.warning('Passwords do not match');
+                    return;
+                }
+            }
+
+            const saveBtn = $('#saveUserBtn');
+            saveBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
+
+            const userData = {
+                Id: userId || null,
+                Username: username,
+                Name: name,
+                Department: department,
+                Role: role,
+                Password: userId ? null : password,
+                IsActive: isActive
+            };
+
+            $.ajax({
+                url: '/MSAPAdmin/MSAP/Upsert',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                data: JSON.stringify(userData),
+                success: function (response) {
+                    saveBtn.prop('disabled', false).html('<i class="bi bi-save"></i> Save User');
+
+                    if (response.success) {
+                        shouldRefreshOnClose = true;
+                        ModernAlert.success(response.message).then(() => {
+                            upsertModal.hide();
+                        });
+                    } else {
+                        ModernAlert.error(response.message);
+                    }
+                },
+                error: function (xhr) {
+                    saveBtn.prop('disabled', false).html('<i class="bi bi-save"></i> Save User');
+
+                    const message = xhr.responseJSON?.message || 'An error occurred while saving the user';
+                    ModernAlert.error(message);
+                }
+            });
+        }
+
+        function toggleStatus(userId, username) {
+            ModernAlert.confirm({
+                title: 'Confirm Action',
+                text: `Are you sure you want to toggle the status of ${username}?`,
+                icon: 'warning',
+                confirmText: 'Yes, proceed'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    ModernAlert.showLoading("Processing...");
+
+                    $.post(`/MSAPAdmin/MSAP/ToggleStatus?id=${encodeURIComponent(userId)}`, { __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() })
+                        .done(function (response) {
+                            if (response.success) {
+                                ModernAlert.success(response.message).then(() => {
+                                    userTable.ajax.reload(null, false);
+                                });
+                            } else {
+                                ModernAlert.error(response.message);
+                            }
+                        })
+                        .fail(function(xhr) {
+                            ModernAlert.error('Failed to toggle user status. Please try again.');
+                        });
+                }
+            });
+        }
+
+        function openResetPasswordModal(userId, username) {
+            $('#resetPasswordForm')[0].reset();
+            $('#resetUserId').val(userId);
+            $('#resetUsername').text(username);
+            resetPasswordModal.show();
+        }
+
+        function resetPassword() {
+            const userId = $('#resetUserId').val();
+            const newPassword = $('#newPassword').val();
+            const confirmNewPassword = $('#confirmNewPassword').val();
+
+            if (!newPassword || newPassword.length < 6) {
+                ModernAlert.warning('Password must be at least 6 characters');
+                return;
+            }
+
+            if (newPassword !== confirmNewPassword) {
+                ModernAlert.warning('Passwords do not match');
+                return;
+            }
+
+            const resetBtn = $('#resetPasswordBtn');
+            resetBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Resetting...');
+
+            $.ajax({
+                url: '/MSAPAdmin/MSAP/ResetPassword',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                data: JSON.stringify({
+                    UserId: userId,
+                    NewPassword: newPassword
+                }),
+                success: function (response) {
+                    resetBtn.prop('disabled', false).html('<i class="bi bi-key"></i> Reset Password');
+
+                    if (response.success) {
+                        shouldRefreshOnClose = true;
+                        ModernAlert.success(response.message).then(() => {
+                            resetPasswordModal.hide();
+                        });
+                    } else {
+                        ModernAlert.error(response.message);
+                    }
+                },
+                error: function (xhr) {
+                    resetBtn.prop('disabled', false).html('<i class="bi bi-key"></i> Reset Password');
+
+                    const message = xhr.responseJSON?.message || 'An error occurred while resetting password';
+                    ModernAlert.error(message);
+                }
+            });
+        }
+    </script>
+}
