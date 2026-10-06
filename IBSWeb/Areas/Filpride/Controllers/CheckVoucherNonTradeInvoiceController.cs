@@ -1691,7 +1691,7 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         supplier => $"{supplier.SupplierCode} - {supplier.SupplierName}", cancellationToken);
             Dictionary<int, string> tugboats = tugboatIds.Length == 0
                 ? []
-                : await _dbContext.MsapTugboats
+                : await _dbContext.MmsiTugboats
                     .AsNoTracking()
                     .Where(tugboat => tugboatIds.Contains(tugboat.TugboatId) && tugboat.IsCompanyOwned)
                     .ToDictionaryAsync(tugboat => tugboat.TugboatId,
@@ -1803,7 +1803,7 @@ namespace IBSWeb.Areas.Filpride.Controllers
         [HttpGet]
         public async Task<IActionResult> GetTugboat(CancellationToken cancellationToken)
         {
-            return Json(await _dbContext.MsapTugboats
+            return Json(await _dbContext.MmsiTugboats
                 .AsNoTracking()
                 .Where(t => t.IsCompanyOwned)
                 .OrderBy(t => t.TugboatNumber)
