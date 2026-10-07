@@ -392,7 +392,11 @@
                 if (!customerId) return;
 
                 $.post('@Url.Action("CheckForTariffRate", "DispatchTicket", new { area = "MSAP" })',
-                    { customerId: customerId, dispatchTicketId: dispatchTicketId },
+                    {
+                        customerId: customerId,
+                        dispatchTicketId: dispatchTicketId,
+                        __RequestVerificationToken: $('#myForm input[name="__RequestVerificationToken"]').val()
+                    },
                     function(result) {
                         if (result.exists) {
                             dispatchRateInput.val(result.dispatch);

@@ -77,6 +77,23 @@ namespace IBS.DataAccess.MSAP.Data
         {
             base.OnModelCreating(builder);
             builder.HasDefaultSchema("msap");
+            builder.Entity<JobOrder>().ToTable("mmsi_job_orders");
+            builder.Entity<DispatchTicket>().ToTable("mmsi_dispatch_tickets");
+            builder.Entity<Billing>().ToTable("mmsi_billings");
+            builder.Entity<Collection>().ToTable("mmsi_collections");
+            builder.Entity<CollectionBill>().ToTable("mmsi_collection_bills");
+            builder.Entity<Port>().ToTable("mmsi_ports");
+            builder.Entity<Terminal>().ToTable("mmsi_terminals");
+            builder.Entity<Vessel>().ToTable("mmsi_vessels");
+            builder.Entity<Service>().ToTable("mmsi_services");
+            builder.Entity<Principal>().ToTable("mmsi_principals");
+            builder.Entity<TariffRate>().ToTable("mmsi_tariff_rates");
+            builder.Entity<Tugboat>().ToTable("mmsi_tugboats");
+            builder.Entity<TugMaster>().ToTable("mmsi_tug_masters");
+            builder.Entity<TugboatOwner>().ToTable("mmsi_tugboat_owners");
+            builder.Entity<VesselSchedule>().ToTable("mmsi_vessel_schedules");
+            builder.Entity<UserAccess>().ToTable("mmsi_user_accesses");
+            builder.Entity<MsapPostedPeriod>().ToTable("mmsi_posted_periods");
             builder.Entity<ApplicationUser>().Ignore(u => u.UserNotifications)
                 .ToTable("AspNetUsers", "public", table => table.ExcludeFromMigrations());
             builder.Entity<IdentityRole>()

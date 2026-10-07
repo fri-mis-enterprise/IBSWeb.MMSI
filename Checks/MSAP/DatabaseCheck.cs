@@ -43,9 +43,12 @@ namespace Checks.MSAP
             try
             {
                 settings.Database = database;
-                await using var original = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
-                    .UseNpgsql(settings.ConnectionString).Options);
-                await original.Database.EnsureCreatedAsync();
+                using var migrationServices = new ServiceCollection().AddLogging()
+                    .AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(settings.ConnectionString))
+                    .AddDefaultIdentity<ApplicationUser>().AddRoles<IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>()
+                    .Services.BuildServiceProvider();
+                await using var original = migrationServices.GetRequiredService<ApplicationDbContext>();
+                await original.Database.MigrateAsync();
                 var originalAudit = new FilprideAuditTrail("check", "Base entry with overlapping reference", "Job Order");
                 original.FilprideAuditTrails.Add(originalAudit);
                 original.Users.Add(new ApplicationUser { Id = "shared-check", UserName = "shared-check", Name = "Shared User", Department = "MIS" });
@@ -53,7 +56,12 @@ namespace Checks.MSAP
                 var before = await SchemaAsync(settings.ConnectionString);
                 await using var module = new MsapDbContext(new DbContextOptionsBuilder<MsapDbContext>()
                     .UseNpgsql(settings.ConnectionString, postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", "msap")).Options);
+                await module.Database.MigrateAsync(module.Database.GetMigrations().First());
+                await module.Database.ExecuteSqlRawAsync("INSERT INTO msap.msap_ports (port_number, port_name, has_sbma) VALUES ('ZZZ', 'Prefix migration check', false)");
                 await module.Database.MigrateAsync();
+                Check(await module.MsapPorts.AnyAsync(port => port.PortNumber == "ZZZ" && port.PortName == "Prefix migration check"),
+                    "Table prefix migration lost existing data.");
+                Console.WriteLine("PASS: mmsi table renames preserve existing MSAP records.");
                 using var seedServices = new ServiceCollection().AddSingleton(module).BuildServiceProvider();
                 await DbSeeder.SeedAsync(seedServices);
                 await DbSeeder.SeedAsync(seedServices);

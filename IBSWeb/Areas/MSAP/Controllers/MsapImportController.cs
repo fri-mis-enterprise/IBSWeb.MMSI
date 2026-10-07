@@ -48,20 +48,20 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync();
                 await dbContext.Database.ExecuteSqlRawAsync(@"
-                    TRUNCATE TABLE msap.msap_collection_bills RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_dispatch_tickets RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_billings RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_job_orders RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_collections RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_tariff_rates RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_principals RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_tugboats RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_terminals RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_vessels RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_tug_masters RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_tugboat_owners RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_services RESTART IDENTITY CASCADE;
-                    TRUNCATE TABLE msap.msap_ports RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_collection_bills RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_dispatch_tickets RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_billings RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_job_orders RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_collections RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_tariff_rates RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_principals RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_tugboats RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_terminals RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_vessels RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_tug_masters RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_tugboat_owners RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_services RESTART IDENTITY CASCADE;
+                    TRUNCATE TABLE msap.mmsi_ports RESTART IDENTITY CASCADE;
                     DELETE FROM msap.customers WHERE company = 'MMSI';
                 ");
                 dbContext.AuditTrails.Add(new AuditTrail(GetUserFullName(), "Reset MSAP data", "MSAP Import"));
@@ -1316,8 +1316,8 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         private async Task<string> ImportBillingsAsync(IFormFile file, ImportMaps maps)
         {
             // Clear existing data to fix scrambled IDs as requested by user
-            await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE msap.msap_dispatch_tickets RESTART IDENTITY CASCADE");
-            await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE msap.msap_billings RESTART IDENTITY CASCADE");
+            await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE msap.mmsi_dispatch_tickets RESTART IDENTITY CASCADE");
+            await dbContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE msap.mmsi_billings RESTART IDENTITY CASCADE");
             // Clear maps to reflect empty tables
             maps.Billing.Clear();
             maps.BillingByRecId.Clear();
@@ -1451,7 +1451,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             }
 
             // Sync sequence after manual ID insertion
-            await dbContext.Database.ExecuteSqlRawAsync("SELECT setval(pg_get_serial_sequence('msap.msap_billings', 'RECID'), COALESCE(MAX(\"RECID\"), 1)) FROM msap.msap_billings");
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT setval(pg_get_serial_sequence('msap.mmsi_billings', 'RECID'), COALESCE(MAX(\"RECID\"), 1)) FROM msap.mmsi_billings");
 
             return $"Billings: {count} imported (Tables cleared first).";
         }
@@ -1651,7 +1651,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             }
 
             // Sync sequence after manual ID insertion
-            await dbContext.Database.ExecuteSqlRawAsync("SELECT setval(pg_get_serial_sequence('msap.msap_dispatch_tickets', 'RECID'), COALESCE(MAX(\"RECID\"), 1)) FROM msap.msap_dispatch_tickets");
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT setval(pg_get_serial_sequence('msap.mmsi_dispatch_tickets', 'RECID'), COALESCE(MAX(\"RECID\"), 1)) FROM msap.mmsi_dispatch_tickets");
 
             return $"Dispatch Tickets: {count} imported, {skipped} already existed.";
         }

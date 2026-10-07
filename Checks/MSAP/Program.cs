@@ -59,6 +59,7 @@ void Check(bool passed, string message)
 
 var originalTables = original.Model.GetRelationalModel().Tables.Select(t => (Schema: t.Schema ?? "public", t.Name)).ToHashSet();
 var moduleTables = module.Model.GetRelationalModel().Tables;
+Check(moduleTables.Where(t => t.Schema == "msap").All(t => !t.Name.StartsWith("msap_", StringComparison.Ordinal)), "An MSAP table still uses the old prefix.");
 Check(moduleTables.Where(t => t.Schema == "msap").All(t => !originalTables.Contains((t.Schema!, t.Name))), "MSAP owns a base table.");
 Check(module.Model.FindEntityType(typeof(AuditTrail))?.GetSchema() == "msap", "MSAP audits are not isolated.");
 Check(original.Model.FindEntityType(typeof(AuditTrail)) == null, "Base context discovered MSAP audits.");

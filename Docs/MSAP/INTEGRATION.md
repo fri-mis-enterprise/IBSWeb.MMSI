@@ -22,11 +22,15 @@ The base context, models, audit trail, historical migrations and existing routes
 
 ## Database setup
 
-Local setup completed on 2026-10-06 against `localhost:5432/ibs_dev`: MSAP migration `20261006081123_InitialMsapModule` applied, with one company and 21 payment terms seeded. Public table counts and schema, Identity contents and base audit contents were verified unchanged. MSAP starts with empty operational records; existing accounting data remains in `public`. The integrated host's `IBSWeb/appsettings.Development.json` uses this database. Normal startup does not require `MSAP__ApplyMigrations=true` after this initialization.
+Local MSAP setup was rebuilt on 2026-10-07 against `localhost:5432/ibs_dev` after merging `origin/master` at `64db5a9a`. The old module migration and provisional MSAP records were removed, and the regenerated migration `20261007015023_InitialMsapModule` was applied with one company and 21 payment terms seeded. Public schema and records, including Identity and base audits, were verified unchanged. MSAP starts with empty operational records; existing accounting data remains in `public`. The integrated host's `IBSWeb/appsettings.Development.json` uses this database. Normal startup does not require `MSAP__ApplyMigrations=true` after this initialization.
+
+Migration `20261007020521_RenameMsapTablesToMmsi` then renamed the module's 17 `msap_` tables to `mmsi_`, including their keys, foreign keys and indexes, within the `msap` schema. Import/reset SQL uses the new table names. The legacy `msap_recid` columns retain origin's spelling. Matching prefixes do not share data with accounting's separate `public.mmsi_*` tables.
+
+The local public migration history still ends at `20260926022634_AddMultipleServiceInvoiceCollections`; origin's three later base migrations remain pending and must be applied separately with `ApplicationDbContext`. The MSAP reset and table rename did not apply or roll back base migrations.
 
 The host database and Identity tables must already be initialized using the base's normal deployment process. MSAP uses the same `ConnectionStrings:MMSIConnection`. Its fresh migration creates only module-owned tables; it does not replay the separate source repository's historical migrations or copy existing source data.
 
-For an explicit schema deployment, from the repository root, supply the same connection through `ConnectionStrings__MMSIConnection` and run:
+For an explicit schema deployment, from the repository root, run:
 
 ```powershell
 dotnet ef database update --project IBS.DataAccess --startup-project IBSWeb --context IBS.DataAccess.MSAP.Data.MsapDbContext
@@ -34,7 +38,7 @@ dotnet ef database update --project IBS.DataAccess --startup-project IBSWeb --co
 
 For startup migration and reference-data initialization, enable `MSAP:ApplyMigrations` (environment variable `MSAP__ApplyMigrations=true`). It defaults to false. Initialization seeds MSAP's company and payment terms, never users, passwords or roles. Running it again preserves existing module records.
 
-The EF design factory reads `ConnectionStrings__MMSIConnection`; its placeholder connection is for generating migrations only. Use the same explicit environment variable when creating future MSAP migrations:
+EF tools, including Rider, resolve the module context from the IBSWeb startup project. They use the host's configuration: appsettings, environment-specific appsettings, development user secrets and environment variables. Set `ConnectionStrings__MMSIConnection` to override the connection explicitly, or pass `-- --environment Development` to select development settings. The module has no separate design database. Create future MSAP migrations with:
 
 ```powershell
 dotnet ef migrations add ChangeName --project IBS.DataAccess --startup-project IBSWeb --context IBS.DataAccess.MSAP.Data.MsapDbContext --output-dir MSAP/Migrations
@@ -48,13 +52,13 @@ Keep base migrations under their existing context and path. Do not use the MSAP 
 
 | Purpose | Tables in `msap` |
 | --- | --- |
-| Workflow | `msap_job_orders`, `msap_dispatch_tickets`, `msap_billings`, `msap_collections`, `msap_collection_bills` |
-| Maritime references | `msap_ports`, `msap_terminals`, `msap_vessels`, `msap_services`, `msap_principals`, `msap_tariff_rates`, `msap_tugboats`, `msap_tug_masters`, `msap_tugboat_owners` |
+| Workflow | `mmsi_job_orders`, `mmsi_dispatch_tickets`, `mmsi_billings`, `mmsi_collections`, `mmsi_collection_bills` |
+| Maritime references | `mmsi_ports`, `mmsi_terminals`, `mmsi_vessels`, `mmsi_services`, `mmsi_principals`, `mmsi_tariff_rates`, `mmsi_tugboats`, `mmsi_tug_masters`, `mmsi_tugboat_owners` |
 | Master files | `customers`, `suppliers`, `employees`, `bank_accounts`, `companies`, `terms` |
-| Scheduling and access | `msap_vessel_schedules`, `msap_user_accesses`, `msap_posted_periods` |
+| Scheduling and access | `mmsi_vessel_schedules`, `mmsi_user_accesses`, `mmsi_posted_periods` |
 | Audit and settings | `audit_trails`, `app_settings`, `notification`, `user_notification`, `__EFMigrationsHistory` |
 
-Use fully qualified names in SQL, for example `msap.msap_billings` and `msap.customers`. EF queries already apply this schema. Import/reset statements and legacy ID sequence updates also explicitly use `msap`; PostgreSQL's default search path does not include it. A missing-table error from an unqualified import statement is a code issue, not a reason to replay migrations.
+Use fully qualified names in SQL, for example `msap.mmsi_billings` and `msap.customers`. EF queries already apply this schema. Import/reset statements and legacy ID sequence updates also explicitly use `msap`; PostgreSQL's default search path does not include it. A missing-table error from an unqualified import statement is a code issue, not a reason to replay migrations.
 
 Billing imports retain the source behavior of clearing existing MSAP billings and dispatch tickets before loading their CSVs. Reset clears the module's imported maritime data. Both operations are transactional; reset records an MSAP audit entry.
 
@@ -70,6 +74,7 @@ Sync upstream normally and retain the four small integration edits. Keep future 
 
 ```powershell
 dotnet build "Integrated Business System.sln"
+./Checks/MSAP/Check-EfConnection.ps1
 dotnet run --project Checks/MSAP/Check.csproj
 ```
 

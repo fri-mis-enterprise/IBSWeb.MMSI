@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IBS.DataAccess.MSAP.Migrations
 {
     [DbContext(typeof(MsapDbContext))]
-    [Migration("20261006081123_InitialMsapModule")]
+    [Migration("20261007015023_InitialMsapModule")]
     partial class InitialMsapModule
     {
         /// <inheritdoc />

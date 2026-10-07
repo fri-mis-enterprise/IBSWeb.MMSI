@@ -3,6 +3,7 @@ using System;
 using IBS.DataAccess.MSAP.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IBS.DataAccess.MSAP.Migrations
 {
     [DbContext(typeof(MsapDbContext))]
-    partial class MsapDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007020521_RenameMsapTablesToMmsi")]
+    partial class RenameMsapTablesToMmsi
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
