@@ -5,6 +5,7 @@ using IBS.Models.Filpride.AccountsReceivable;
 using IBS.Models.Filpride.Books;
 using IBS.Models.Filpride.Integrated;
 using IBS.Models.Filpride.MasterFile;
+using IBS.Models.Filpride.MsapMasterFile;
 using IBS.Models.MasterFile;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -88,6 +89,12 @@ namespace IBS.DataAccess.Data
 
         public DbSet<FilprideChartOfAccount> FilprideChartOfAccounts { get; set; }
         public DbSet<Product> Products { get; set; }
+
+        public DbSet<Tugboat> MmsiTugboats { get; set; }
+
+        public DbSet<TugboatOwner> MmsiTugboatOwners { get; set; }
+
+        public DbSet<TugMaster> MmsiTugMasters { get; set; }
 
         #endregion --Master File Entities
 

@@ -44,6 +44,20 @@ class MasterFileSelector {
                 formatOption: (item) => `${item.accountNumber} - ${item.accountName}`,
                 inputName: 'SupplierMasterFileId'
             },
+            TUGBOAT: {
+                id: 'tugboat',
+                title: 'Tugboat',
+                url: urls.getTugboats,
+                triggerAccounts: [
+                    '102010500 Tug Boats',
+                    '102010600 Tug Boats - Major Repair',
+                    '102010700 Tug Boats - Dry Docking',
+                    '102010800 Tug Equipments'
+                ],
+                placeholder: 'Select a tugboat',
+                formatOption: (item) => `${item.accountNumber} - ${item.accountName}`,
+                inputName: 'TugboatMasterFileId'
+            },
         };
 
         this.initializeEventListeners();
