@@ -1,9 +1,13 @@
 @model DispatchTicketViewModel
+@inject IBS.Services.MSAP.IRoleService MsapRoleService
 
 @{
     ViewData["Title"] = "Create Dispatch Ticket";
     ViewData["IsFullWidth"] = true;
     var now = DateTimeHelper.GetCurrentPhilippineTime();
+    string? userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    string? role = userId is not null ? await MsapRoleService.GetUserRoleAsync(userId) : null;
+    bool isAdmin = role is MsapRoles.Admin or MsapRoles.SuperAdmin;
 }
 
 <div class="modern-layout">
@@ -248,7 +252,7 @@
                                     <div class="flex justify-between items-center mb-1">
                                         <label class="modern-label">
                                             Dispatch Ticket Image
-                                            @if (!User.IsInRole("Admin"))
+                                            @if (!isAdmin)
                                             {
                                                 <span class="text-error" title="Required">*</span>
                                             }
@@ -258,7 +262,7 @@
                                         </button>
                                     </div>
                                     <input class="modern-input" id="imageUpload" name="imageFile" type="file" accept="image/*" style="padding: 0.35rem;"
-                                           @(User.IsInRole("Admin") ? "" : "required")>
+                                           @(isAdmin ? "" : "required")>
                                 </div>
                                 <div>
                                     <div class="flex justify-between items-center mb-1">

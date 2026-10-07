@@ -16,9 +16,32 @@ IBSWeb.MMSI is the host. MSAP's Job Order, Dispatch Ticket, tariff, billing, col
 | Development attachments | `IBSWeb/App_Data/MSAP/LocalStorage`, `/msap-storage` |
 | Cloud attachments | `msap/` object prefix, separately configured MSAP storage options |
 
-MSAP reuses the host's Identity users, roles, login and cookie. The module context reads the existing `public."AspNetUsers"`, `public."AspNetRoles"` and `public."AspNetUserRoles"` tables; its migrations exclude them. Account and role administration operates on this shared identity directory. MSAP permissions, company/reference data, posted periods and audits remain separate. The host's company selection is not required to open the MMSI maritime dashboard.
+MSAP reuses the host's Identity users, login and cookie. MSAP supports exactly `Admin`, `User` and `SuperAdmin`, with explicit assignments stored as a single `MSAP.Role` claim in the existing `public."AspNetUserClaims"` table. User creation, account details, activation and password resets are managed only in IBSWeb/Filpride. MSAP has no account-management endpoints. MSAP role claims and procedure permissions are separate from shared IBSWeb role memberships. Every MSAP endpoint requires an active IBSWeb account, except the anonymous error page. Without an explicit MSAP role, a shared Filpride Admin defaults to MSAP Admin; other accounts default to User. An explicit MSAP role takes precedence. SuperAdmin always requires an explicit MSAP role claim. Invalid or duplicate MSAP role claims deny access. Admin and SuperAdmin have all procedure permissions; User permissions come from MSAP User Access. SuperAdmin can also use the MSAP Admin area. Role changes are checked from storage each request, including existing login sessions. MSAP permissions, company/reference data, posted periods and audits remain separate. The host's company selection is not required to open the MMSI maritime dashboard.
 
 The base context, models, audit trail, historical migrations and existing routes were not changed. The base has four integration files with additive edits: `IBSWeb/Program.cs`, `IBSWeb/Views/Shared/_Navbar.cshtml`, `IBSWeb/IBSWeb.csproj` and `IBS.Utility/IBS.Utility.csproj`. New dependencies and manual publication rules are in module-owned `.props` files. The local development connection now targets `ibs_dev`.
+
+## Initial MSAP role assignment
+
+Active IBSWeb accounts can open MSAP without a separate role assignment: Filpride Admin defaults to MSAP Admin, and other accounts default to User. To manage MSAP users and permissions, explicitly assign the first MSAP SuperAdmin to an existing IBSWeb account. Run the following on the target database with the chosen username; it aborts if the account does not exist. It changes only that account's MSAP role claim:
+
+```sql
+DO $$
+DECLARE
+    target_user_id text;
+BEGIN
+    SELECT id INTO STRICT target_user_id
+    FROM public."AspNetUsers"
+    WHERE normalized_user_name = upper('REPLACE_WITH_IBSWEB_USERNAME');
+
+    DELETE FROM public."AspNetUserClaims"
+    WHERE user_id = target_user_id AND claim_type = 'MSAP.Role';
+
+    INSERT INTO public."AspNetUserClaims" (user_id, claim_type, claim_value)
+    VALUES (target_user_id, 'MSAP.Role', 'SuperAdmin');
+END $$;
+```
+
+MSAP does not provide user creation or account editing. Manage shared accounts in IBSWeb/Filpride and assign explicit MSAP role claims through an administrative database operation when needed. Unassigned accounts use their default Admin or User role; existing procedure permissions are retained. No schema migration is needed.
 
 ## Database setup
 

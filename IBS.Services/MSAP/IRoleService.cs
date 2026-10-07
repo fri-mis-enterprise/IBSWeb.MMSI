@@ -1,5 +1,4 @@
 using IBS.Models.MSAP;
-using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Identity;
 
 namespace IBS.Services.MSAP
@@ -7,7 +6,7 @@ namespace IBS.Services.MSAP
     public interface IRoleService
     {
         Task<IEnumerable<IdentityRole>> GetAllRolesAsync(CancellationToken cancellationToken);
-        Task<ServiceResult> CreateRoleAsync(string roleName, CancellationToken cancellationToken);
+        Task<string?> GetUserRoleAsync(string userId);
         Task<(IEnumerable<object> Data, int TotalRecords)> GetPagedRolesAsync(DataTablesParameters parameters, CancellationToken cancellationToken);
     }
 }

@@ -33,6 +33,6 @@ graph LR
 | 4  | Billing & Invoicing | [Billing](billing) |
 | 5  | Collection & Payment | [Collection](collection) |
 | 6  | Master Files | [Master Files](master-files) |
-| 7  | Administration (Users & Roles) | [Administration](admin) |
+| 7  | Administration (Roles & Access) | [Administration](admin) |
 | 8  | Import & Export | [Import & Export](import-export) |
 | 9  | Reports | [Reports](reports) |

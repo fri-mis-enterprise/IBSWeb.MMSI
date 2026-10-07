@@ -1,10 +1,11 @@
+using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IBSWeb.MSAP.Areas.MSAPSuperAdmin.Controllers
 {
     [Area("MSAPSuperAdmin")]
-    [Authorize(Roles = "SuperAdmin")]
+    [Authorize(Policy = MsapRoles.SuperAdminPolicy)]
     public class HomeController : Controller
     {
         public IActionResult Index()

@@ -1,6 +1,8 @@
 using ApplicationUser = IBS.Models.ApplicationUser;
 using IBS.Models.MSAP;
+using IBS.Services.MSAP;
 using IBS.Services.MSAP.AccessControl;
+using IBS.Utility.MSAP.Constants;
 using Markdig;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -15,7 +17,8 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
     public class DocsController(
         IWebHostEnvironment env,
         UserManager<ApplicationUser> userManager,
-        IAccessControlService accessControl) : Controller
+        IAccessControlService accessControl,
+        IRoleService roleService) : Controller
     {
         private static readonly string[] ManualFiles =
         [
@@ -125,7 +128,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 ("billing", "Billing", null),
                 ("collection", "Collection", null),
                 ("master-files", "Master Files", null),
-                ("admin", "Administration", async _ => User.IsInRole("Admin")),
+                ("admin", "Administration", async uid => await roleService.GetUserRoleAsync(uid) is MsapRoles.Admin or MsapRoles.SuperAdmin),
                 ("import-export", "Import & Export", async uid => await accessControl.HasMsapImportAccessAsync(uid)),
                 ("reports", "Reports", async uid => await accessControl.HasMaritimeReportAccessAsync(uid))
             };
@@ -146,7 +149,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             var userId = userManager.GetUserId(User)!;
             return fileSlug switch
             {
-                "07-admin" => User.IsInRole("Admin"),
+                "07-admin" => await roleService.GetUserRoleAsync(userId) is MsapRoles.Admin or MsapRoles.SuperAdmin,
                 "08-import-export" => await accessControl.HasMsapImportAccessAsync(userId),
                 "09-reports" => await accessControl.HasMaritimeReportAccessAsync(userId),
                 _ => true

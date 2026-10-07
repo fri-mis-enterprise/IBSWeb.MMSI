@@ -22,6 +22,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         DispatchTicketService dispatchTicketService,
         ICloudStorageService cloudStorageService,
         IAccessControlService accessControl,
+        IRoleService roleService,
         ILogger<DispatchTicketController> logger)
         : Controller
     {
@@ -73,7 +74,9 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             IFormFile? videoFile,
             CancellationToken cancellationToken = default)
         {
-            if ((imageFile == null || imageFile.Length == 0) && !User.IsInRole("Admin"))
+            string? userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            string? role = userId is not null ? await roleService.GetUserRoleAsync(userId) : null;
+            if ((imageFile == null || imageFile.Length == 0) && role is not (MsapRoles.Admin or MsapRoles.SuperAdmin))
             {
                 TempData["warning"] = "An image of the Dispatch Ticket is strictly required!";
                 viewModel = await dispatchTicketService.PopulateDispatchTicketViewModelAsync(viewModel, null, cancellationToken);

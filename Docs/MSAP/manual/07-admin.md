@@ -1,6 +1,6 @@
-# 7. Administration (Users & Roles)
+# 7. Administration (Roles & Access)
 
-User and role management is available in the **Admin** area. Requires **Admin** role.
+Role information and procedure permissions are available in the **Admin** area. Requires the MSAP **Admin** or **SuperAdmin** role.
 
 ## User Access Permissions
 
@@ -15,40 +15,16 @@ Managed via: **MSAP > User Access** (Admin role required)
 **Path:** GENERAL > Role
 
 - **Table columns:** Name
-- **Actions:** Create New Role (via modal)
-- Roles are used for coarse authorization (`[Authorize(Roles = "Admin")]`)
+- The list is fixed: **Admin**, **User**, **SuperAdmin**. Additional roles cannot be created.
+- An explicit MSAP role takes precedence over the Filpride role.
+- Without an explicit MSAP role, Filpride Admin defaults to MSAP Admin; other active IBSWeb accounts default to User.
+- SuperAdmin always requires an explicit MSAP assignment.
+- Admin and SuperAdmin have all procedure permissions. User access is assigned per procedure.
+- SuperAdmin can access both MSAP administration areas.
 
-### Create a Role
-1. Click **CREATE NEW ROLE**
-2. Enter the role name (e.g., "Supervisor")
-3. Submit
+## Shared Accounts
 
-## User Management
-
-![User Management list](/msap/docs-images/admin/user-management.png)
-
-**Path:** GENERAL > User
-
-- **Table columns:** Username, Full Name, Department, Role, Status, Created, Modified, Actions
-- **Actions:** Create, Edit, Toggle Status, Reset Password
-
-### Create a User
-1. Click **CREATE NEW USER** (opens modal)
-2. Fill in: Username, Full Name, Department, Role, Password
-3. Submit
-
-### Edit a User
-1. Click the Edit icon on a user row
-2. Modify fields in the modal
-3. Submit
-
-### Toggle User Status
-- Click the Activate/Deactivate icon to enable or disable a user account
-
-### Reset Password
-1. Click the Reset Password icon
-2. Enter the new password
-3. Submit
+Create and edit users, activate or deactivate accounts, and reset passwords through IBSWeb/Filpride user management. MSAP uses the same login and does not provide a separate user-management module.
 
 ## User Access (MSAP Permissions)
 
@@ -60,6 +36,7 @@ Managed via: **MSAP > User Access** (Admin role required)
 
 ## Tips
 
-- **Roles** are coarse (Admin/User); **User Access** handles per-procedure permissions
-- Deactivating a user prevents login but preserves their audit trail
+- **Roles** are coarse (Admin/User/SuperAdmin); **User Access** handles per-procedure permissions
+- Account details, passwords and activation are shared with IBSWeb.
+- Deactivating a user prevents login and MSAP access but preserves their audit trail
 - Password reset does NOT require the old password

@@ -2,6 +2,7 @@ using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.MSAP.Helpers;
+using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -9,7 +10,7 @@ using System.Security.Claims;
 namespace IBSWeb.MSAP.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = MsapRoles.AdminPolicy)]
     public class BankAccountController(
         IUnitOfWork unitOfWork)
         : Controller

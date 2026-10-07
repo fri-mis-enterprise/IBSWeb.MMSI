@@ -4,6 +4,10 @@ using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Services.MSAP;
 using IBS.Services.MSAP.AccessControl;
 using IBS.Utility.MSAP;
+using IBS.Utility.MSAP.Constants;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.ApplicationModels;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
@@ -40,12 +44,25 @@ namespace IBSWeb.MSAP
             services.AddScoped<ITugboatService, TugboatService>();
             services.AddScoped<IVesselService, VesselService>();
             services.AddScoped<IEmployeeService, EmployeeService>();
-            services.AddScoped<IUserService, UserService>();
             services.AddScoped<IRoleService, RoleService>();
+            services.AddScoped<IAuthorizationHandler, MsapRoleHandler>();
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy(MsapRoles.AccessPolicy, policy => policy.RequireAuthenticatedUser()
+                    .RequireClaim(MsapRoles.ClaimType, MsapRoles.Admin, MsapRoles.User, MsapRoles.SuperAdmin));
+                options.AddPolicy(MsapRoles.AdminPolicy, policy => policy.RequireAuthenticatedUser()
+                    .RequireClaim(MsapRoles.ClaimType, MsapRoles.Admin, MsapRoles.SuperAdmin));
+                options.AddPolicy(MsapRoles.SuperAdminPolicy, policy => policy.RequireAuthenticatedUser()
+                    .RequireClaim(MsapRoles.ClaimType, MsapRoles.SuperAdmin));
+            });
             services.AddScoped<IAuditTrailService, AuditTrailService>();
             services.AddScoped<IVesselScheduleService, VesselScheduleService>();
             services.AddScoped<SuperAdminService>();
-            services.AddControllersWithViews(options => options.Filters.Add<MsapJsonResultFilter>());
+            services.AddControllersWithViews(options =>
+            {
+                options.Filters.Add<MsapJsonResultFilter>();
+                options.Conventions.Add(new MsapAuthorizationConvention());
+            });
             services.Configure<RazorViewEngineOptions>(options => options.ViewLocationExpanders.Add(new MsapViewLocationExpander()));
             return services;
         }
@@ -70,6 +87,18 @@ namespace IBSWeb.MSAP
                 var context = scope.ServiceProvider.GetRequiredService<MsapDbContext>();
                 await context.Database.MigrateAsync();
                 await DbSeeder.SeedAsync(scope.ServiceProvider);
+            }
+        }
+    }
+
+    internal class MsapAuthorizationConvention : IControllerModelConvention
+    {
+        public void Apply(ControllerModel controller)
+        {
+            if (controller.RouteValues.TryGetValue("area", out string? area)
+                && area is "MSAP" or "MSAPAdmin" or "MSAPSuperAdmin")
+            {
+                controller.Filters.Add(new AuthorizeFilter(MsapRoles.AccessPolicy));
             }
         }
     }

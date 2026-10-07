@@ -28,8 +28,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         public async Task<IActionResult> Index(CancellationToken ct)
         {
             var model = new DashboardCountViewModel { UpdatedAt = DateTimeHelper.GetCurrentPhilippineTime() };
-            model.ShowDashboard = User.Identity?.IsAuthenticated == true
-                && !User.IsInRole("PortCoordinator");
+            model.ShowDashboard = User.Identity?.IsAuthenticated == true;
             if (!model.ShowDashboard) return View(model);
 
             var userId = userManager.GetUserId(User);

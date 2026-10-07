@@ -63,7 +63,7 @@ These are managed under **MSAP** and require `ManageMaritimeMasterFile` access.
 
 ### Bank Accounts
 - Company bank accounts for payment processing
-- **Restriction:** Admin only (`[Authorize(Roles = "Admin")]`)
+- **Restriction:** MSAP Admin or SuperAdmin only
 
 ### Companies
 - Internal company entities within the organization

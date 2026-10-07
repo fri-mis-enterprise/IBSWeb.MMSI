@@ -37,7 +37,7 @@ The top navigation bar has these sections:
 |----------|-------------|
 | **Home** | Dashboard |
 | **MSAP** | Core workflow: Job Orders, Dispatch Tickets, Billing, Collection, Import, Reports |
-| **Master File** | (Admin only) Users, Roles, Employees, User Access, Payment Terms, Bank Accounts |
+| **Master File** | (Admin only) Roles, Employees, User Access, Payment Terms, Bank Accounts |
 | **MSAP References** | Master data: Activities, Ports, Principals, Tariff Rates, Terminals, Tugboats, Vessels, Customers, Suppliers |
 | **Manual** | This user manual |
 | **User menu** | Top-right â€” shows your name, logout option |

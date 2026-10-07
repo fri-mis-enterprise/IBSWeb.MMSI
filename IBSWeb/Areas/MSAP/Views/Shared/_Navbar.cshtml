@@ -7,10 +7,12 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
 @inject IAccessControlService AccessControl
+@inject IBS.Services.MSAP.IRoleService MsapRoleService
 
 @{
     var userName   = UserManager.GetUserName(User);
     var userId     = UserManager.GetUserId(User);
+    string? msapRole = userId is not null ? await MsapRoleService.GetUserRoleAsync(userId) : null;
     var company    = User.Claims.FirstOrDefault(c => c.Type == "Company")?.Value ?? string.Empty;
     var stationCode = User.Claims.FirstOrDefault(c => c.Type == "StationCode")?.Value ?? string.Empty;
 
@@ -84,7 +86,7 @@
                     </a>
                 </li>
 
-                @if (!User.IsInRole("PortCoordinator") && await ModernHasMsapAccess())
+                @if (await ModernHasMsapAccess())
                 {
                     <!-- MSAP mega menu -->
                     <li class="mnav-item" data-mega role="none">
@@ -198,7 +200,7 @@
                     </li>
                 }
 
-                @if (User.IsInRole("Admin"))
+                @if (msapRole is MsapRoles.Admin or MsapRoles.SuperAdmin)
                 {
                     <!-- Master File mega menu -->
                     <li class="mnav-item" data-mega role="none">
@@ -209,17 +211,8 @@
                         <div class="mnav-mega" style="--mnav-cols:2; min-width:480px;" role="menu">
                             <div class="mnav-mega-grid">
                                 <div>
-                                    <div class="mnav-section-label">Users &amp; Access</div>
+                                    <div class="mnav-section-label">Roles &amp; Access</div>
                                     <div class="mnav-link-list">
-                                        <a class="mnav-mega-link"
-                                           asp-area="MSAPAdmin" asp-controller="User" asp-action="Index"
-                                           role="menuitem">
-                                            <span class="material-symbols-outlined">person</span>
-                                            <div>
-                                                <div class="mnav-link-title">User</div>
-                                                <div class="mnav-link-sub">Manage accounts</div>
-                                            </div>
-                                        </a>
                                         <a class="mnav-mega-link"
                                            asp-area="MSAPAdmin" asp-controller="AppRole" asp-action="Index"
                                            role="menuitem">
@@ -286,7 +279,7 @@
                     </li>
                 }
 
-                @if (User.IsInRole("SuperAdmin"))
+                @if (msapRole == MsapRoles.SuperAdmin)
                 {
                     <!-- SuperAdmin mega menu -->
                     <li class="mnav-item" data-mega role="none">

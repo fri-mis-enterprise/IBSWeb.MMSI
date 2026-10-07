@@ -1,13 +1,13 @@
 using IBS.Models.MSAP;
 using IBS.Services.MSAP;
+using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IBSWeb.MSAP.Areas.MSAPAdmin.Controllers
 {
     [Area("MSAPAdmin")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = MsapRoles.AdminPolicy)]
     public class AppRoleController(IRoleService roleService)
         : Controller
     {
@@ -15,19 +15,6 @@ namespace IBSWeb.MSAP.Areas.MSAPAdmin.Controllers
         {
             var roles = await roleService.GetAllRolesAsync(cancellationToken);
             return View(roles);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Upsert([FromBody] IdentityRole model, CancellationToken cancellationToken)
-        {
-            if (string.IsNullOrWhiteSpace(model.Name))
-            {
-                return Json(new { success = false, message = "Role name is required" });
-            }
-
-            var result = await roleService.CreateRoleAsync(model.Name, cancellationToken);
-            return Json(new { success = result.IsSuccess, message = result.Message });
         }
 
         [HttpPost]

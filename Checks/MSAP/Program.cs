@@ -6,6 +6,9 @@ using IBS.Models;
 using IBS.Models.MSAP;
 using IBS.Services.MSAP;
 using IBSWeb.MSAP;
+using IBS.Utility.MSAP.Constants;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -73,8 +76,20 @@ Check(services.GetRequiredService<IBS.DataAccess.MSAP.Repository.IRepository.IUn
 
 var actions = services.GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items.OfType<ControllerActionDescriptor>().ToList();
 var moduleActions = actions.Where(a => a.ControllerTypeInfo.Namespace?.StartsWith("IBSWeb.MSAP.", StringComparison.Ordinal) == true).ToList();
-Check(moduleActions.Select(a => a.ControllerTypeInfo).Distinct().Count() == 31, "An imported controller is missing.");
+Check(moduleActions.Select(a => a.ControllerTypeInfo).Distinct().Count() == 30, "An imported controller is missing.");
 Check(moduleActions.All(a => a.RouteValues["area"] is "MSAP" or "MSAPAdmin" or "MSAPSuperAdmin"), "An MSAP controller collides with a base area.");
+Check(moduleActions.All(action => action.FilterDescriptors.Any(filter =>
+    filter.Filter is AuthorizeFilter authorize && authorize.AuthorizeData?.Any(data => data.Policy == MsapRoles.AccessPolicy) == true)),
+    "An MSAP endpoint lacks the module membership policy.");
+Check(!actions.Where(action => action.RouteValues["area"] == "Filpride").Any(action => action.FilterDescriptors.Any(filter =>
+    filter.Filter is AuthorizeFilter authorize && authorize.AuthorizeData?.Any(data => data.Policy == MsapRoles.AccessPolicy) == true)),
+    "MSAP membership policy leaked into Filpride.");
+Check(!moduleActions.Any(action => action.ControllerTypeInfo.GetCustomAttributes(typeof(AuthorizeAttribute), true)
+    .Cast<AuthorizeAttribute>().Any(authorize => !string.IsNullOrEmpty(authorize.Roles))),
+    "MSAP still requires shared IBSWeb roles.");
+Check(!moduleActions.Any(action => action.ControllerName == "User"), "MSAP still exposes shared account management.");
+Check(actions.Any(action => action.RouteValues["area"] == "Admin" && action.ControllerName == "User"),
+    "Shared IBSWeb/Filpride user management was removed.");
 foreach (var controller in moduleActions.Select(a => a.ControllerTypeInfo.AsType()).Distinct())
 {
     ActivatorUtilities.CreateInstance(services, controller);

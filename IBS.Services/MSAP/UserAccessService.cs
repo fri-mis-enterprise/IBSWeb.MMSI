@@ -3,6 +3,7 @@ using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.Enums;
 using IBS.Models.MSAP.MasterFile;
+using IBS.Utility.MSAP.Constants;
 using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -12,15 +13,21 @@ namespace IBS.Services.MSAP
     public class UserAccessService(
         IUnitOfWork unitOfWork,
         UserManager<ApplicationUser> userManager,
+        IRoleService roleService,
         ILogger<UserAccessService> logger)
         : IUserAccessService
     {
         public async Task<bool> CheckAccess(string id, ProcedureEnum procedure, CancellationToken cancellationToken = default)
         {
-            var user = await userManager.FindByIdAsync(id);
-            if (user != null && (await userManager.IsInRoleAsync(user, "Admin") || await userManager.IsInRoleAsync(user, "SuperAdmin")))
+            string? role = await roleService.GetUserRoleAsync(id);
+            if (role is MsapRoles.Admin or MsapRoles.SuperAdmin)
             {
                 return true;
+            }
+
+            if (role != MsapRoles.User)
+            {
+                return false;
             }
 
             var userAccess = await unitOfWork.UserAccess
@@ -70,7 +77,14 @@ namespace IBS.Services.MSAP
         public async Task<UserAccess> PopulateUsersAsync(UserAccess? model, CancellationToken cancellationToken)
         {
             model ??= new UserAccess();
-            model.Users = await unitOfWork.Msap.GetMsapUsersSelectListById(cancellationToken);
+            model.Users = [];
+            foreach (var item in await unitOfWork.Msap.GetMsapUsersSelectListById(cancellationToken))
+            {
+                if (await roleService.GetUserRoleAsync(item.Value) == MsapRoles.User)
+                {
+                    model.Users.Add(item);
+                }
+            }
             return model;
         }
 
@@ -78,6 +92,11 @@ namespace IBS.Services.MSAP
         {
             try
             {
+                if (await roleService.GetUserRoleAsync(model.UserId) != MsapRoles.User)
+                {
+                    return ServiceResult.Failure("Procedure permissions can only be assigned to an active MSAP User.");
+                }
+
                 var existing = await unitOfWork.UserAccess.GetAsync(ua => ua.UserId == model.UserId, cancellationToken);
                 if (existing != null)
                 {

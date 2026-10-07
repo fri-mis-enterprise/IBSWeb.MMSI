@@ -4,13 +4,14 @@ using IBS.Models.MSAP.Enums;
 using IBS.Models.MSAP.MasterFile;
 using IBS.Services.MSAP.Attributes;
 using IBS.Utility.MSAP.Helpers;
+using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IBSWeb.MSAP.Areas.MSAPAdmin.Controllers
 {
     [Area("MSAPAdmin")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = MsapRoles.AdminPolicy)]
     [RequireAnyAccess("Access denied.", ProcedureEnum.ManagePostedPeriod)]
     public class PostedPeriodController(
         IUnitOfWork unitOfWork,

@@ -1,73 +1,67 @@
+using ApplicationUser = IBS.Models.ApplicationUser;
 using IBS.Models.MSAP;
-using IBS.Utility.MSAP.Helpers;
+using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using System.Linq.Dynamic.Core;
 
 namespace IBS.Services.MSAP
 {
-    public class RoleService(
-        RoleManager<IdentityRole> roleManager)
-        : IRoleService
+    public class RoleService : IRoleService
     {
-        public async Task<IEnumerable<IdentityRole>> GetAllRolesAsync(CancellationToken cancellationToken)
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly Dictionary<string, string?> _userRoles = [];
+
+        public RoleService(UserManager<ApplicationUser> userManager)
         {
-            return await roleManager.Roles.ToListAsync(cancellationToken);
+            _userManager = userManager;
         }
 
-        public async Task<ServiceResult> CreateRoleAsync(string roleName, CancellationToken cancellationToken)
+        public Task<IEnumerable<IdentityRole>> GetAllRolesAsync(CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(roleName))
-            {
-                return ServiceResult.Failure("Role name is required.");
-            }
-
-            if (!await roleManager.RoleExistsAsync(roleName))
-            {
-                var result = await roleManager.CreateAsync(new IdentityRole(roleName));
-                if (result.Succeeded)
-                {
-                    return ServiceResult.Success("Role created successfully.");
-                }
-                return ServiceResult.Failure(string.Join(", ", result.Errors.Select(e => e.Description)));
-            }
-
-            return ServiceResult.Failure("Role already exists.");
+            IEnumerable<IdentityRole> roles =
+            [
+                new(MsapRoles.Admin),
+                new(MsapRoles.User),
+                new(MsapRoles.SuperAdmin)
+            ];
+            return Task.FromResult(roles);
         }
 
-        public async Task<(IEnumerable<object> Data, int TotalRecords)> GetPagedRolesAsync(DataTablesParameters parameters, CancellationToken cancellationToken)
+        public async Task<string?> GetUserRoleAsync(string userId)
         {
-            var queried = roleManager.Roles;
-
-            // Global search
-            if (!string.IsNullOrEmpty(parameters.Search.Value))
+            if (_userRoles.TryGetValue(userId, out string? role))
             {
-                var searchValue = parameters.Search.Value.ToLower();
-                queried = queried.Where(r => r.Name!.ToLower().Contains(searchValue));
+                return role;
             }
 
-            // Sorting
-            if (parameters.Order?.Count > 0)
+            ApplicationUser? user = await _userManager.FindByIdAsync(userId);
+            if (user is null || !user.IsActive)
             {
-                var orderColumn = parameters.Order[0];
-                var columnName = parameters.Columns[orderColumn.Column].Name;
-                if (string.IsNullOrEmpty(columnName))
-                {
-                    columnName = parameters.Columns[orderColumn.Column].Data;
-                }
-
-                var sortDirection = orderColumn.Dir.ToLower() == "asc" ? "ascending" : "descending";
-                queried = queried.AsQueryable().OrderBy($"{columnName} {sortDirection}");
+                _userRoles[userId] = null;
+                return null;
             }
 
-            var totalRecords = await queried.CountAsync(cancellationToken);
-            var pagedData = await queried
-                .Select(r => new { r.Name })
-                .Skip(parameters.Start)
-                .Take(parameters.Length)
-                .ToListAsync(cancellationToken);
+            role = MsapRoles.GetRole(await _userManager.GetClaimsAsync(user),
+                await _userManager.IsInRoleAsync(user, MsapRoles.Admin));
+            _userRoles[userId] = role;
+            return role;
+        }
 
-            return (pagedData, totalRecords);
+        public async Task<(IEnumerable<object> Data, int TotalRecords)> GetPagedRolesAsync(
+            DataTablesParameters parameters, CancellationToken cancellationToken)
+        {
+            IEnumerable<IdentityRole> roles = await GetAllRolesAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(parameters.Search.Value))
+            {
+                roles = roles.Where(role => role.Name!.Contains(parameters.Search.Value, StringComparison.OrdinalIgnoreCase));
+            }
+
+            roles = parameters.Order?.FirstOrDefault()?.Dir == "desc"
+                ? roles.OrderByDescending(role => role.Name)
+                : roles.OrderBy(role => role.Name);
+            int totalRecords = roles.Count();
+            IEnumerable<object> data = roles.Skip(parameters.Start).Take(parameters.Length)
+                .Select(role => new { role.Name }).ToList();
+            return (data, totalRecords);
         }
     }
 }

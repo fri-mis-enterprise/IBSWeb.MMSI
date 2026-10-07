@@ -74,7 +74,9 @@ namespace Checks.MSAP
                     .Services.BuildServiceProvider();
                 var users = identityServices.GetRequiredService<UserManager<ApplicationUser>>();
                 var dashboardWork = new UnitOfWork(module);
-                var access = new AccessControlService(users, new UserAccessService(dashboardWork, users, NullLogger<UserAccessService>.Instance));
+                await RoleCheck.RunAsync(users, identityServices.GetRequiredService<RoleManager<IdentityRole>>(), dashboardWork);
+                var roles = new RoleService(users);
+                var access = new AccessControlService(users, new UserAccessService(dashboardWork, users, roles, NullLogger<UserAccessService>.Instance));
                 var dashboard = new IBSWeb.MSAP.Areas.MSAP.Controllers.HomeController(users, module, access,
                     new VesselScheduleService(dashboardWork, NullLogger<VesselScheduleService>.Instance),
                     NullLogger<IBSWeb.MSAP.Areas.MSAP.Controllers.HomeController>.Instance);
@@ -85,9 +87,9 @@ namespace Checks.MSAP
                     "Host company claim hides the MSAP dashboard or its empty states fail.");
                 Check(!dashboardModel.CanViewFinance && !dashboardModel.CanCreateBilling, "Dashboard bypassed MSAP permissions.");
                 identity.AddClaim(new Claim(ClaimTypes.Role, "PortCoordinator"));
-                Check(!((DashboardCountViewModel)((ViewResult)await dashboard.Index(default)).Model!).ShowDashboard,
-                    "Dashboard bypassed the PortCoordinator restriction.");
-                Console.WriteLine("PASS: Filpride login opens MSAP dashboard; empty states, procedure permissions and role restriction preserved.");
+                Check(((DashboardCountViewModel)((ViewResult)await dashboard.Index(default)).Model!).ShowDashboard,
+                    "Filpride PortCoordinator role hides the MSAP dashboard.");
+                Console.WriteLine("PASS: shared login opens MSAP dashboard; PortCoordinator does not hide it.");
 
                 var customer = new Customer { CustomerCode = "CHECK01", CustomerName = "Check Customer", CustomerAddress = "Check Address", CustomerTin = "000-000-000-00000", CustomerTerms = "COD", CustomerType = "Regular", VatType = "Vatable", ZipCode = "1000", Company = "MMSI" };
                 var vessel = new Vessel { VesselNumber = "0001", VesselName = "Check Vessel", VesselType = "Cargo" };

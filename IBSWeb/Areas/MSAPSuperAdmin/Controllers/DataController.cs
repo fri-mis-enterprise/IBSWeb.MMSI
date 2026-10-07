@@ -1,13 +1,14 @@
 using System.Text.Json;
 using IBS.Models.MSAP;
 using IBS.Services.MSAP;
+using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IBSWeb.MSAP.Areas.MSAPSuperAdmin.Controllers
 {
     [Area("MSAPSuperAdmin")]
-    [Authorize(Roles = "SuperAdmin")]
+    [Authorize(Policy = MsapRoles.SuperAdminPolicy)]
     public class DataController(
         SuperAdminService superAdminService,
         ILogger<DataController> logger)
