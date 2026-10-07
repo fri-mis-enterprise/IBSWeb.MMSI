@@ -126,7 +126,7 @@ namespace IBS.Services.MSAP
                     model.Terms = "COD";
                 }
 
-                model.DueDate = await unitOfWork.Billing.ComputeDueDateAsync(model.Terms, model.Date, cancellationToken);
+                model.DueDate = await unitOfWork.Terms.ComputeDueDateAsync(model.Terms, model.Date, cancellationToken);
 
                 if (model.IsUndocumented)
                 {
@@ -836,7 +836,7 @@ namespace IBS.Services.MSAP
                     model.Principal = await unitOfWork.Principal.GetAsync(p => p.PrincipalId == model.PrincipalId.Value, cancellationToken);
 
                 var terms = (model.PrincipalId > 0 ? model.Principal?.Terms : customer.CustomerTerms) ?? "COD";
-                var dueDate = await unitOfWork.Billing.ComputeDueDateAsync(terms, model.Date, cancellationToken);
+                var dueDate = await unitOfWork.Terms.ComputeDueDateAsync(terms, model.Date, cancellationToken);
 
                 decimal dispatch = 0, baf = 0;
                 var ticketEntities = new List<DispatchTicket>();

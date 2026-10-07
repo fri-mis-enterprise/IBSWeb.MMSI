@@ -4,15 +4,18 @@ using IBS.DataAccess.MSAP.Data;
 using IBS.DataAccess.MSAP.Repository;
 using IBS.Models;
 using IBS.Models.Filpride.Books;
+using IBS.Models.Filpride.MasterFile;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.MasterFile;
 using IBS.Models.MSAP.ViewModels;
 using IBS.Services.MSAP;
 using IBS.Services.MSAP.AccessControl;
 using IBS.Utility.MSAP.Constants;
+using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -52,6 +55,10 @@ namespace Checks.MSAP
                 var originalAudit = new FilprideAuditTrail("check", "Base entry with overlapping reference", "Job Order");
                 original.FilprideAuditTrails.Add(originalAudit);
                 original.Users.Add(new ApplicationUser { Id = "shared-check", UserName = "shared-check", Name = "Shared User", Department = "MIS" });
+                original.FilprideTerms.AddRange(
+                    new FilprideTerms { TermsCode = "COD" },
+                    new FilprideTerms { TermsCode = "CHECK17", NumberOfDays = 17 },
+                    new FilprideTerms { TermsCode = "M15", NumberOfDays = 15, NumberOfMonths = 1 });
                 await original.SaveChangesAsync();
                 var before = await SchemaAsync(settings.ConnectionString);
                 await using var module = new MsapDbContext(new DbContextOptionsBuilder<MsapDbContext>()
@@ -73,7 +80,13 @@ namespace Checks.MSAP
                     .AddIdentityCore<ApplicationUser>().AddRoles<IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>()
                     .Services.BuildServiceProvider();
                 var users = identityServices.GetRequiredService<UserManager<ApplicationUser>>();
-                var dashboardWork = new UnitOfWork(module);
+                var dashboardWork = new UnitOfWork(module, original);
+                Check(!await module.Terms.AnyAsync(), "MSAP seeded an independent payment terms list.");
+                List<SelectListItem> paymentTerms = await dashboardWork.Terms.GetFilprideTermsListAsyncByCode();
+                Check(paymentTerms.Select(term => term.Value).SequenceEqual(new[] { "CHECK17", "COD", "M15" }),
+                    "MSAP term selection does not use Filpride terms.");
+                Check(await dashboardWork.Terms.ComputeDueDateAsync("M15", new DateOnly(2026, 10, 6)) == new DateOnly(2026, 11, 15),
+                    "Shared month-based due-date calculation changed.");
                 await RoleCheck.RunAsync(users, identityServices.GetRequiredService<RoleManager<IdentityRole>>(), dashboardWork);
                 var roles = new RoleService(users);
                 var access = new AccessControlService(users, new UserAccessService(dashboardWork, users, roles, NullLogger<UserAccessService>.Instance));
@@ -91,7 +104,7 @@ namespace Checks.MSAP
                     "Filpride PortCoordinator role hides the MSAP dashboard.");
                 Console.WriteLine("PASS: shared login opens MSAP dashboard; PortCoordinator does not hide it.");
 
-                var customer = new Customer { CustomerCode = "CHECK01", CustomerName = "Check Customer", CustomerAddress = "Check Address", CustomerTin = "000-000-000-00000", CustomerTerms = "COD", CustomerType = "Regular", VatType = "Vatable", ZipCode = "1000", Company = "MMSI" };
+                var customer = new Customer { CustomerCode = "CHECK01", CustomerName = "Check Customer", CustomerAddress = "Check Address", CustomerTin = "000-000-000-00000", CustomerTerms = "CHECK17", CustomerType = "Regular", VatType = "Vatable", ZipCode = "1000", Company = "MMSI" };
                 var vessel = new Vessel { VesselNumber = "0001", VesselName = "Check Vessel", VesselType = "Cargo" };
                 var port = new Port { PortNumber = "001", PortName = "Check Port" };
                 var terminal = new Terminal { TerminalNumber = "001", TerminalName = "Check Terminal", Port = port };
@@ -100,7 +113,7 @@ namespace Checks.MSAP
                 module.AddRange(customer, vessel, port, terminal, tug, maritimeService);
                 await module.SaveChangesAsync();
                 var job = new JobOrder { Date = new DateOnly(2026, 10, 6), CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId };
-                var work = new UnitOfWork(module);
+                var work = new UnitOfWork(module, original);
                 var service = new JobOrderService(work, NullLogger<JobOrderService>.Instance);
                 var result = await service.CreateJobOrderAsync(job, "check", default);
                 Check(result.IsSuccess, result.Message ?? "Job Order creation failed.");
@@ -133,6 +146,8 @@ namespace Checks.MSAP
                 };
                 var createdBill = await billingService.CreateBillingAsync(bill, "check", "MMSI", default);
                 Check(createdBill.IsSuccess, createdBill.Message ?? "Billing creation failed.");
+                Check(bill.Terms == "CHECK17" && bill.DueDate == job.Date.AddDays(17),
+                    "MSAP billing did not use the shared Filpride term with an empty local terms table.");
                 Check(bill.Amount == 112m && bill.Balance == 112m, "VAT billing totals changed.");
                 Check((await audits.GetAuditTrailsByEntityAsync("Billing", bill.MsapBillingId, default)).Any(a => a.ReferenceNumber == bill.MsapBillingNumber), "Billing creation audit lost its ID.");
                 var posted = await billingService.PostBillingAsync(bill.MsapBillingId, "check", default);
@@ -147,6 +162,27 @@ namespace Checks.MSAP
                 Check(bill.Status == MsapConstants.BillingStatus.Collected && bill.Balance == 0m, "Full collection did not settle the billing.");
                 Check((await audits.GetJobOrderTimelineAsync(job.JobOrderId, default)).Any(a => a.DocumentType == "Collection" && a.RecordId == collection.Data), "Collection is missing from the MSAP timeline.");
                 Check(await original.FilprideAuditTrails.CountAsync() == 1 && await original.FilprideAuditTrails.AnyAsync(a => a.Id == originalAudit.Id), "Base audits were changed.");
+                var splitTicket = new DispatchTicket
+                {
+                    JobOrderId = job.JobOrderId, CreatedBy = "check", DispatchNumber = "D-SPLIT", TugBoatId = tug.TugboatId,
+                    CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId,
+                    ServiceId = maritimeService.ServiceId, Status = MsapConstants.DispatchTicketStatus.ForBilling,
+                    DispatchNetRevenue = 100m, BAFNetRevenue = 10m, TotalNetRevenue = 110m
+                };
+                module.MsapDispatchTickets.Add(splitTicket);
+                await module.SaveChangesAsync();
+                ServiceResult<(int DispatchBillingId, int BafBillingId)> split = await billingService.CreatePhilCebSplitAsync(new Billing
+                {
+                    MsapBillingNumber = "SPLIT01", Date = job.Date, CustomerId = customer.CustomerId,
+                    JobOrderId = job.JobOrderId, VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId,
+                    BilledTo = "CHECK01", ToBillDispatchTickets = [splitTicket.DispatchTicketId.ToString()]
+                }, "BAF-CHECK", "check", "MMSI", default);
+                Check(split.IsSuccess, split.Message ?? "Split billing creation failed.");
+                Check(await module.MsapBillings.CountAsync(b =>
+                    (b.MsapBillingNumber == "SPLIT01" || b.MsapBillingNumber == "BAF-CHECK")
+                    && b.Terms == "CHECK17" && b.DueDate == job.Date.AddDays(17)) == 2,
+                    "Split billing did not use shared Filpride terms.");
+                Console.WriteLine("PASS: shared Filpride term selection, month-based due dates and regular/split billing with no local terms.");
                 var auditCount = await module.AuditTrails.CountAsync();
                 await module.Database.MigrateAsync();
                 Check(await module.AuditTrails.CountAsync() == auditCount, "Repeating MSAP migration lost audits.");

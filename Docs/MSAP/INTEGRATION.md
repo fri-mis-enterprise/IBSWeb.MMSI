@@ -59,7 +59,7 @@ For an explicit schema deployment, from the repository root, run:
 dotnet ef database update --project IBS.DataAccess --startup-project IBSWeb --context IBS.DataAccess.MSAP.Data.MsapDbContext
 ```
 
-For startup migration and reference-data initialization, enable `MSAP:ApplyMigrations` (environment variable `MSAP__ApplyMigrations=true`). It defaults to false. Initialization seeds MSAP's company and payment terms, never users, passwords or roles. Running it again preserves existing module records.
+For startup migration and reference-data initialization, enable `MSAP:ApplyMigrations` (environment variable `MSAP__ApplyMigrations=true`). It defaults to false. Initialization seeds MSAP's company, never users, passwords, roles or payment terms. MSAP reads Filpride payment terms for term selection and billing due dates; maintain those records in Filpride. Running it again preserves existing module records.
 
 EF tools, including Rider, resolve the module context from the IBSWeb startup project. They use the host's configuration: appsettings, environment-specific appsettings, development user secrets and environment variables. Set `ConnectionStrings__MMSIConnection` to override the connection explicitly, or pass `-- --environment Development` to select development settings. The module has no separate design database. Create future MSAP migrations with:
 

@@ -14,12 +14,7 @@
                 </div>
                 <h1 class="modern-headline-lg">@ViewData["Title"]</h1>
             </div>
-            <div class="flex gap-2">
-                <a asp-action="Create" class="modern-btn-primary">
-                    <span class="material-symbols-outlined">add_circle</span>
-                    CREATE NEW
-                </a>
-            </div>
+            <p>Payment terms are maintained in Filpride and shared with MSAP.</p>
         </div>
 
         <div class="modern-card">
@@ -36,7 +31,6 @@
                             <th>Terms Code</th>
                             <th>Days</th>
                             <th>Months</th>
-                            <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                 </table>
@@ -48,13 +42,8 @@
 @section Scripts{
     <script>
         $(document).ready(function () {
-            const editUrl = '@Url.Action("Edit", "PaymentTerms", new { area = "MSAP" })';
-
             let table = $('#paginatedTable').DataTable({
                 "order": [[0, 'asc']],
-                "columnDefs": [
-                    { "orderable": false, "targets": [3] }
-                ],
                 "processing": true,
                 "serverSide": true,
                 "stateDuration": 86400,
@@ -88,40 +77,9 @@
                 "columns": [
                     { "data": "termsCode" },
                     { "data": "numberOfDays" },
-                    { "data": "numberOfMonths" },
-                    {
-                        "data": null,
-                        "orderable": false,
-                        "className": "text-center",
-                        "render": function (data, type, row) {
-                            return ModernTable.render.dropdown([
-                                { label: 'Edit Terms', icon: 'edit', url: `${editUrl}?code=${row.termsCode}` },
-                                {
-                                    label: 'Delete Terms',
-                                    icon: 'delete',
-                                    isError: true,
-                                    onclick: `confirmDelete('${row.termsCode}')`
-                                }
-                            ]);
-                        }
-                    }
+                    { "data": "numberOfMonths" }
                 ]
             });
         });
-
-        function confirmDelete(termsCode) {
-            ModernAlert.confirm({
-                title: 'Delete Payment Term?',
-                text: "Are you sure you want to delete this payment term?",
-                icon: 'warning',
-                confirmText: 'Yes, Delete',
-                cancelText: 'Cancel'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    let url = `@Url.Action("Delete", "PaymentTerms", new { area = "MSAP" })?code=${termsCode}`;
-                    window.location.href = url;
-                }
-            });
-        }
     </script>
 }

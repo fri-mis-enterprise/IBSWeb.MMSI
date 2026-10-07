@@ -1,6 +1,7 @@
 using IBS.DataAccess.MSAP.Repository.MasterFile.IRepository;
 using IBS.DataAccess.MSAP.Repository.Msap.IRepository;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using ITermsRepository = IBS.DataAccess.Repository.Filpride.IRepository.ITermsRepository;
 
 namespace IBS.DataAccess.MSAP.Repository.IRepository
 {

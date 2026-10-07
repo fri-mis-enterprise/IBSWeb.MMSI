@@ -58,8 +58,8 @@ These are managed under **MSAP** and require `ManageMaritimeMasterFile` access.
 - Linked to Payment Terms
 
 ### Payment Terms
-- Define payment schedules (e.g., 30 days, 60 days)
-- Referenced by Customers and Suppliers
+- Read-only list of payment schedules maintained in Filpride (e.g., 30 days, 60 days)
+- Shared by MSAP Customers, Suppliers and billing due-date calculations
 
 ### Bank Accounts
 - Company bank accounts for payment processing

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using IBS.DataAccess.Data;
 using IBS.DataAccess.MSAP.Data;
 using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.DataAccess.MSAP.Repository.MasterFile;
@@ -9,6 +10,7 @@ using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using ITermsRepository = IBS.DataAccess.Repository.Filpride.IRepository.ITermsRepository;
 
 namespace IBS.DataAccess.MSAP.Repository
 {
@@ -82,7 +84,7 @@ namespace IBS.DataAccess.MSAP.Repository
 
         #endregion
 
-        public UnitOfWork(MsapDbContext db)
+        public UnitOfWork(MsapDbContext db, ApplicationDbContext sharedDb)
         {
             _db = db;
 
@@ -94,7 +96,7 @@ namespace IBS.DataAccess.MSAP.Repository
             Supplier = new SupplierRepository(_db);
             AuditTrail = new AuditTrailRepository(_db);
             Employee = new EmployeeRepository(_db);
-            Terms = new TermsRepository(_db);
+            Terms = new IBS.DataAccess.Repository.Filpride.TermsRepository(sharedDb);
 
             #endregion
 

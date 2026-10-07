@@ -68,7 +68,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         {
             SupplierViewModel model = new()
             {
-                PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken)
+                PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken)
             };
 
             return View(model);
@@ -85,7 +85,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 return BadRequest();
             }
 
-            model.PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken);
+            model.PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken);
 
             if (await unitOfWork.Supplier.IsSupplierExistAsync(model.SupplierName, model.Category,
                     companyClaims, cancellationToken))
@@ -221,7 +221,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
 
             var model = new SupplierViewModel(supplier)
             {
-                PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken)
+                PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken)
             };
 
             return View(model);
@@ -231,7 +231,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(SupplierViewModel model, IFormFile? registration, IFormFile? document, CancellationToken cancellationToken)
         {
-            model.PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken);
+            model.PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken);
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -289,7 +289,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 return NotFound();
             }
 
-            supplier.PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken);
+            supplier.PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken);
 
             return View(supplier);
         }
@@ -310,7 +310,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 return NotFound();
             }
 
-            supplier.PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken);
+            supplier.PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken);
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -357,7 +357,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 return NotFound();
             }
 
-            supplier.PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken);
+            supplier.PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken);
 
             return View(supplier);
         }
@@ -378,7 +378,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 return NotFound();
             }
 
-            supplier.PaymentTerms = await unitOfWork.Terms.GetTermsListAsyncByCode(cancellationToken);
+            supplier.PaymentTerms = await unitOfWork.Terms.GetFilprideTermsListAsyncByCode(cancellationToken);
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 

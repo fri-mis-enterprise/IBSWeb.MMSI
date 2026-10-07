@@ -97,29 +97,5 @@ namespace IBS.DataAccess.MSAP.Repository
         {
             return grossAmount - ewtAmount;
         }
-
-        public async Task<DateOnly> ComputeDueDateAsync(string terms, DateOnly transactionDate, CancellationToken cancellationToken = default)
-        {
-            var getTerms = await _db.Terms
-                .FirstOrDefaultAsync(x => x.TermsCode == terms, cancellationToken);
-
-            if (getTerms == null)
-            {
-                throw new ArgumentException("No terms found.");
-            }
-
-            DateOnly dueDate = default;
-
-            dueDate =  transactionDate.AddMonths(getTerms.NumberOfMonths).AddDays(getTerms.NumberOfDays);
-
-            if (!terms.Contains('M'))
-            {
-                return dueDate;
-            }
-
-            dueDate =  dueDate.AddDays(-transactionDate.Day);
-
-            return dueDate;
-        }
     }
 }

@@ -20,7 +20,5 @@ namespace IBS.DataAccess.MSAP.Repository.IRepository
         decimal ComputeNetOfVat(decimal grossAmount);
 
         decimal ComputeVatAmount(decimal netOfVatAmount);
-
-        Task<DateOnly> ComputeDueDateAsync(string terms, DateOnly transactionDate, CancellationToken cancellationToken = default);
     }
 }

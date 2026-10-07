@@ -1,45 +1,16 @@
-using ApplicationUser = IBS.Models.ApplicationUser;
-using IBS.Models.MSAP.MasterFile;
 using System.Linq.Dynamic.Core;
-using System.Security.Claims;
-using IBS.DataAccess.MSAP.Data;
 using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Models.MSAP;
-using IBS.Utility.MSAP.Helpers;
-using IBS.Utility.MSAP.Constants;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace IBSWeb.MSAP.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     public class PaymentTermsController(
         IUnitOfWork unitOfWork,
-        ILogger<PaymentTermsController> logger,
-        UserManager<ApplicationUser> userManager,
-        MsapDbContext dbContext)
+        ILogger<PaymentTermsController> logger)
         : Controller
     {
-        private string GetUserFullName()
-        {
-            return User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.GivenName)?.Value
-                   ?? User.Identity?.Name!;
-        }
-
-        private async Task<string?> GetCompanyClaimAsync()
-        {
-            var user = await userManager.GetUserAsync(User);
-
-            if (user == null)
-            {
-                return null;
-            }
-
-            var claims = await userManager.GetClaimsAsync(user);
-            return claims.FirstOrDefault(c => c.Type == "Company")?.Value ?? MsapConstants.Company_MMSI;
-        }
-
         public IActionResult Index()
         {
             return View();
@@ -97,169 +68,6 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 logger.LogError(ex, "Failed to get suppliers");
                 TempData["error"] = ex.Message;
                 return RedirectToAction(nameof(Index));
-            }
-        }
-
-        [HttpGet]
-        public IActionResult Create()
-        {
-            PaymentTermsViewModel viewModel = new();
-
-            return View(viewModel);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(PaymentTermsViewModel model, CancellationToken cancellationToken)
-        {
-            var getUserFullName = GetUserFullName();
-            var companyClaims = await GetCompanyClaimAsync();
-
-            if (companyClaims == null)
-            {
-                return BadRequest();
-            }
-
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                model.TermsCode = model.TermsCode.Trim();
-                model.CreatedBy = getUserFullName;
-                model.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
-                model.EditedBy = string.Empty;
-                await unitOfWork.Terms.AddAsync(model, cancellationToken);
-                await unitOfWork.SaveAsync(cancellationToken);
-
-                #region -- Audit Trail Recording --
-
-                AuditTrail auditTrailBook = new(getUserFullName,
-                    $"Create new Terms #{model.TermsCode}", "Terms");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
-
-                #endregion -- Audit Trail Recording --
-
-                await unitOfWork.SaveAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                TempData["success"] = "Terms created successfully";
-                return RedirectToAction(nameof(Index));
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to create terms master file. Created by: {UserName}", getUserFullName);
-                await transaction.RollbackAsync(cancellationToken);
-                TempData["error"] = $"Error: '{ex.Message}'";
-                return View(model);
-            }
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> Edit(string code, CancellationToken cancellationToken)
-        {
-            if (string.IsNullOrEmpty(code))
-            {
-                return NotFound();
-            }
-
-            var supplier = await unitOfWork.Terms.GetAsync(c => c.TermsCode == code, cancellationToken);
-
-            if (supplier == null)
-            {
-                return NotFound();
-            }
-
-            return View(new PaymentTermsViewModel(supplier));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(PaymentTermsViewModel model, CancellationToken cancellationToken)
-        {
-            var getUserFullName = GetUserFullName();
-            var companyClaims = await GetCompanyClaimAsync();
-
-            if (companyClaims == null)
-            {
-                return BadRequest();
-            }
-
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                model.EditedBy = getUserFullName;
-                await unitOfWork.Terms.UpdateAsync(model, cancellationToken);
-
-                #region -- Audit Trail Recording --
-
-                AuditTrail auditTrailBook = new (getUserFullName,
-                    $"Edited Terms #{model.TermsCode}", "Terms");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
-
-                #endregion -- Audit Trail Recording --
-
-                await unitOfWork.SaveAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                TempData["success"] = "Terms updated successfully";
-                return RedirectToAction(nameof(Index));
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to edit supplier master file. Edited by: {UserName}", userManager.GetUserName(User));
-                await transaction.RollbackAsync(cancellationToken);
-                TempData["error"] = $"Error: '{ex.Message}'";
-                return View(model);
-            }
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(string code, CancellationToken cancellationToken)
-        {
-            if (string.IsNullOrEmpty(code))
-            {
-                return BadRequest();
-            }
-
-            var getUserFullName = GetUserFullName();
-            var companyClaims = await GetCompanyClaimAsync();
-
-            if (companyClaims == null)
-            {
-                return BadRequest();
-            }
-
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                var existingTerms = await dbContext.Terms
-                                        .FirstOrDefaultAsync(x => x.TermsCode == code, cancellationToken)
-                                    ?? throw new InvalidOperationException("Terms with code not found.");
-
-                dbContext.Remove(existingTerms);
-                await dbContext.SaveChangesAsync(cancellationToken);
-
-                #region -- Audit Trail Recording --
-
-                AuditTrail auditTrailBook = new (getUserFullName,
-                    $"Deleted Terms #{code}", "Terms");
-                await unitOfWork.AuditTrail.AddAsync(auditTrailBook, cancellationToken);
-
-                #endregion -- Audit Trail Recording --
-
-                await unitOfWork.SaveAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                TempData["success"] = "Terms deleted successfully";
-                return RedirectToAction(nameof(Index));
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex,                    "Failed to delete terms master file. Deleted by: {UserName}",
-                    getUserFullName);
-                await transaction.RollbackAsync(cancellationToken);
-                TempData["error"] = $"Error: '{ex.Message}'";
-                return View(nameof(Index));
             }
         }
     }

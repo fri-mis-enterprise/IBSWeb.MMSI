@@ -87,6 +87,8 @@ Check(!actions.Where(action => action.RouteValues["area"] == "Filpride").Any(act
 Check(!moduleActions.Any(action => action.ControllerTypeInfo.GetCustomAttributes(typeof(AuthorizeAttribute), true)
     .Cast<AuthorizeAttribute>().Any(authorize => !string.IsNullOrEmpty(authorize.Roles))),
     "MSAP still requires shared IBSWeb roles.");
+Check(moduleActions.Where(action => action.ControllerName == "PaymentTerms")
+    .All(action => action.ActionName is "Index" or "GetPaymentTerms"), "MSAP still exposes payment term maintenance.");
 Check(!moduleActions.Any(action => action.ControllerName == "User"), "MSAP still exposes shared account management.");
 Check(actions.Any(action => action.RouteValues["area"] == "Admin" && action.ControllerName == "User"),
     "Shared IBSWeb/Filpride user management was removed.");

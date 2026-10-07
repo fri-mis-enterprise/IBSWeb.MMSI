@@ -72,7 +72,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             {
 
                 PaymentTerms = await unitOfWork.Terms
-                    .GetTermsListAsyncByCode(cancellationToken),
+                    .GetFilprideTermsListAsyncByCode(cancellationToken),
                 Commissionees = await unitOfWork.GetCommissioneeListAsyncById(companyClaims, cancellationToken),
             };
             return View(model);
@@ -90,7 +90,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             }
 
             model.PaymentTerms = await unitOfWork.Terms
-                .GetTermsListAsyncByCode(cancellationToken);
+                .GetFilprideTermsListAsyncByCode(cancellationToken);
             model.Commissionees = await unitOfWork.GetCommissioneeListAsyncById(companyClaims, cancellationToken);
 
             if (!ModelState.IsValid)
@@ -156,7 +156,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             {
                 var model = new CustomerViewModel(customer);
                 model.PaymentTerms = await unitOfWork.Terms
-                    .GetTermsListAsyncByCode(cancellationToken);
+                    .GetFilprideTermsListAsyncByCode(cancellationToken);
                 model.Commissionees = await unitOfWork.GetCommissioneeListAsyncById(companyClaims, cancellationToken);
                 return View(model);
             }
@@ -169,7 +169,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         public async Task<IActionResult> Edit(CustomerViewModel model, CancellationToken cancellationToken)
         {
             model.PaymentTerms = await unitOfWork.Terms
-                .GetTermsListAsyncByCode(cancellationToken);
+                .GetFilprideTermsListAsyncByCode(cancellationToken);
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -275,7 +275,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             }
 
             customer.PaymentTerms = await unitOfWork.Terms
-                .GetTermsListAsyncByCode(cancellationToken);
+                .GetFilprideTermsListAsyncByCode(cancellationToken);
 
             return View(customer);
         }
@@ -299,7 +299,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             }
 
             customer.PaymentTerms = await unitOfWork.Terms
-                .GetTermsListAsyncByCode(cancellationToken);
+                .GetFilprideTermsListAsyncByCode(cancellationToken);
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -347,7 +347,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             if (customer != null)
             {
                 customer.PaymentTerms = await unitOfWork.Terms
-                    .GetTermsListAsyncByCode(cancellationToken);
+                    .GetFilprideTermsListAsyncByCode(cancellationToken);
 
                 return View(customer);
             }
@@ -374,7 +374,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             }
 
             customer.PaymentTerms = await unitOfWork.Terms
-                .GetTermsListAsyncByCode(cancellationToken);
+                .GetFilprideTermsListAsyncByCode(cancellationToken);
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
