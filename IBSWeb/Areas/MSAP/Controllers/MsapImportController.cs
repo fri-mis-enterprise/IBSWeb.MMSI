@@ -1,18 +1,18 @@
-using IBS.Models.MSAP;
-using IBS.Models.MSAP.MasterFile;
-using CsvHelper;
-using CsvHelper.Configuration;
-using IBS.DataAccess.MSAP.Data;
-using IBS.Utility.MSAP.Helpers;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.Security.Claims;
 using System.Text;
+using CsvHelper;
+using CsvHelper.Configuration;
+using IBS.DataAccess.MSAP.Data;
+using IBS.Models.MSAP;
 using IBS.Models.MSAP.Enums;
+using IBS.Models.MSAP.MasterFile;
 using IBS.Services.MSAP.Attributes;
+using IBS.Utility.MSAP.Helpers;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     public class MsapImportController(MsapDbContext dbContext, ILogger<MsapImportController> logger) : Controller
@@ -416,10 +416,7 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
             maps.BankAccount.Clear();
             foreach (var b in await dbContext.BankAccounts.AsNoTracking().ToListAsync(ct))
             {
-                if (b.BankAccountCode != null)
-                {
-                    maps.BankAccount[b.BankAccountCode] = b.BankAccountId;
-                }
+                maps.BankAccount[b.BankAccountCode] = b.BankAccountId;
             }
 
             maps.Customer.Clear();

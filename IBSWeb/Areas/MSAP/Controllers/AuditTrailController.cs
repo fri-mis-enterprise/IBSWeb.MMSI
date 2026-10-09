@@ -2,7 +2,7 @@ using IBS.Models.MSAP;
 using IBS.Services.MSAP;
 using Microsoft.AspNetCore.Mvc;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     public class AuditTrailController(IAuditTrailService auditTrailService, JobOrderService jobOrderService, ILogger<AuditTrailController> logger): Controller

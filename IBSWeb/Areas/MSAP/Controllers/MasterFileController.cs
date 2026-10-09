@@ -1,17 +1,17 @@
-using ApplicationUser = IBS.Models.ApplicationUser;
-using IBS.Models.MSAP.MasterFile;
+using System.Drawing;
+using System.Security.Claims;
 using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Models.MSAP;
+using IBS.Models.MSAP.MasterFile;
 using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
-using System.Drawing;
-using System.Security.Claims;
+using ApplicationUser = IBS.Models.ApplicationUser;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     [Authorize]

@@ -25,6 +25,7 @@ namespace IBSWeb.MSAP
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IUserAccessService, UserAccessService>();
             services.AddScoped<IAccessControlService, AccessControlService>();
+            services.Configure<GCSConfigOptions>(configuration);
             services.Configure<GCSConfigOptions>(configuration.GetSection("MSAP"));
             services.AddSingleton<ICloudStorageService>(provider =>
                 provider.GetRequiredService<IWebHostEnvironment>().IsDevelopment()

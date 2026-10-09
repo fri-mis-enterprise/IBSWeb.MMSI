@@ -1,5 +1,4 @@
-using ApplicationUser = IBS.Models.ApplicationUser;
-using IBS.Models.MSAP;
+using System.Text.RegularExpressions;
 using IBS.Services.MSAP;
 using IBS.Services.MSAP.AccessControl;
 using IBS.Utility.MSAP.Constants;
@@ -7,9 +6,9 @@ using Markdig;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.RegularExpressions;
+using ApplicationUser = IBS.Models.ApplicationUser;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     [Route("MSAP/Docs")]

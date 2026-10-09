@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.DTOs.MSAP;
 using IBS.Models.MSAP;
@@ -9,9 +10,8 @@ using IBS.Services.MSAP.Attributes;
 using IBS.Utility.MSAP.Constants;
 using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     /// <summary>
     /// Controller for managing Dispatch Tickets in the MMSI system.

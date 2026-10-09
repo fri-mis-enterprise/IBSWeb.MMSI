@@ -1,8 +1,8 @@
 using System.Drawing;
 using IBS.DataAccess.MSAP.Repository.IRepository;
-using IBS.Models.MSAP.MasterFile;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.Enums;
+using IBS.Models.MSAP.MasterFile;
 using IBS.Services.MSAP.Attributes;
 using IBS.Utility.MSAP.Constants;
 using IBS.Utility.MSAP.Helpers;
@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     [RequireAnyAccess("Access denied. You don't have permission to view reports.", ProcedureEnum.ViewMaritimeReport)]

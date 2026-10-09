@@ -7,7 +7,7 @@ using IBS.Services.MSAP.Attributes;
 using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     /// <summary>
     /// Controller for managing Collections and payment allocations in the MMSI system.

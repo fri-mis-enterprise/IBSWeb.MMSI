@@ -5,7 +5,7 @@ using IBS.Utility.MSAP.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace IBSWeb.MSAP.Areas.MSAPSuperAdmin.Controllers
+namespace IBSWeb.Areas.MSAPSuperAdmin.Controllers
 {
     [Area("MSAPSuperAdmin")]
     [Authorize(Policy = MsapRoles.SuperAdminPolicy)]

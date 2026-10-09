@@ -1,4 +1,5 @@
-using ApplicationUser = IBS.Models.ApplicationUser;
+using System.Diagnostics;
+using System.Text.Json;
 using IBS.DataAccess.MSAP.Data;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.Enums;
@@ -11,10 +12,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Diagnostics;
-using System.Text.Json;
+using ApplicationUser = IBS.Models.ApplicationUser;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     public class HomeController(
@@ -29,10 +29,17 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         {
             var model = new DashboardCountViewModel { UpdatedAt = DateTimeHelper.GetCurrentPhilippineTime() };
             model.ShowDashboard = User.Identity?.IsAuthenticated == true;
-            if (!model.ShowDashboard) return View(model);
+            if (!model.ShowDashboard)
+            {
+                return View(model);
+            }
 
             var userId = userManager.GetUserId(User);
-            if (userId == null) return Challenge();
+            if (userId == null)
+            {
+                return Challenge();
+            }
+
             model.CanViewDispatch = await accessControl.HasAnyAccessAsync(userId,
                 ProcedureEnum.CreateDispatchTicket, ProcedureEnum.EditDispatchTicket, ProcedureEnum.DeleteDispatchTicket);
             model.CanViewBilling = await accessControl.HasAnyAccessAsync(userId,
@@ -60,7 +67,10 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                 var bills = dbContext.MsapBillings.AsNoTracking()
                     .Where(b => b.CanceledDate == null && b.VoidedDate == null);
                 if (model.CanViewBilling)
+                {
                     model.ForPosting = await bills.CountAsync(b => b.Status == MsapConstants.BillingStatus.ForPosting, ct);
+                }
+
                 if (model.CanViewFinance)
                 {
                     var posted = bills.Where(b => b.Status == MsapConstants.BillingStatus.ForCollection || b.Status == MsapConstants.BillingStatus.Collected);
@@ -97,15 +107,20 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                     .OrderBy(s => s.PlannedStart).ThenBy(s => s.VesselScheduleId).Take(5).ToList();
                 var names = await dbContext.MsapTugboats.AsNoTracking().ToDictionaryAsync(t => t.TugboatId, t => t.TugboatName, ct);
                 foreach (var schedule in schedules.Concat(model.UpcomingSchedules).DistinctBy(s => s.VesselScheduleId))
+                {
                     model.AssignedTugs[schedule.VesselScheduleId] =
                         (string.IsNullOrEmpty(schedule.AssignedTugboatIds) ? [] : JsonSerializer.Deserialize<List<int>>(schedule.AssignedTugboatIds) ?? [])
                         .Distinct().Count(names.ContainsKey);
+                }
+
                 // ponytail: pairwise checks for today's plans; index resource intervals if daily volume grows.
                 foreach (var schedule in schedules.Where(s => s.Status != MsapConstants.VesselScheduleStatus.Completed))
                 {
                     var conflicts = await scheduleService.CheckConflictsAsync(schedule, ct, schedules, names);
                     if (conflicts.Any(c => c.ConflictStart < day.AddDays(1) && c.ConflictEnd > day))
+                    {
                         model.ConflictingScheduleIds.Add(schedule.VesselScheduleId);
+                    }
                 }
                 model.ScheduleCount = schedules.Count;
                 model.ShortageCount = schedules.Count(s => s.Status != MsapConstants.VesselScheduleStatus.Completed

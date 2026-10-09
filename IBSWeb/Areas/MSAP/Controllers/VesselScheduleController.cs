@@ -1,3 +1,4 @@
+using System.Text.Json;
 using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Models.MSAP;
 using IBS.Models.MSAP.ViewModels;
@@ -7,9 +8,8 @@ using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using System.Text.Json;
 
-namespace IBSWeb.MSAP.Areas.MSAP.Controllers
+namespace IBSWeb.Areas.MSAP.Controllers
 {
     [Area("MSAP")]
     [Authorize]
@@ -20,10 +20,18 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(DateTime? month, CancellationToken ct)
         {
-            if (!ModelState.IsValid) return BadRequest("Choose a valid month.");
+            if (!ModelState.IsValid)
+            {
+                return BadRequest("Choose a valid month.");
+            }
+
             var selected = month ?? DateTimeHelper.GetCurrentPhilippineTime();
             var start = new DateTime(selected.Year, selected.Month, 1);
-            if (start.Year < 1900 || start.Year > 9998) return BadRequest("Choose a month between 1900 and 9998.");
+            if (start.Year < 1900 || start.Year > 9998)
+            {
+                return BadRequest("Choose a month between 1900 and 9998.");
+            }
+
             var gridStart = start.AddDays(-(int)start.DayOfWeek);
             var schedules = await scheduleService.GetSchedulesAsync(gridStart, gridStart.AddDays(42), ct);
             var board = new VesselScheduleBoardViewModel { Date = start, Schedules = schedules.ToList() };
@@ -34,9 +42,17 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         [HttpGet]
         public async Task<IActionResult> Day(DateTime? date, CancellationToken ct)
         {
-            if (!ModelState.IsValid) return BadRequest("Choose a valid date.");
+            if (!ModelState.IsValid)
+            {
+                return BadRequest("Choose a valid date.");
+            }
+
             var day = (date ?? DateTimeHelper.GetCurrentPhilippineTime()).Date;
-            if (day.Year < 1900 || day.Year > 9998) return BadRequest("Choose a date between 1900 and 9998.");
+            if (day.Year < 1900 || day.Year > 9998)
+            {
+                return BadRequest("Choose a date between 1900 and 9998.");
+            }
+
             var schedules = await scheduleService.GetSchedulesAsync(day, day.AddDays(1), ct);
             var tugboats = await unitOfWork.Tugboat.GetAllAsync(null, ct);
             var board = new VesselScheduleBoardViewModel
@@ -53,7 +69,10 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         public async Task<IActionResult> Create(DateTime? date, CancellationToken ct)
         {
             if (!ModelState.IsValid || date.HasValue && (date.Value.Year < 1900 || date.Value.Year > 9998))
+            {
                 return BadRequest("Choose a date between 1900 and 9998.");
+            }
+
             var start = date?.Date.AddHours(8) ?? DateTimeHelper.GetCurrentPhilippineTime();
             var vm = new VesselScheduleViewModel { PlannedStart = start, PlannedEnd = start.AddHours(2) };
 
@@ -177,7 +196,10 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
         {
             if (!ModelState.IsValid || !start.HasValue || !end.HasValue
                 || start.Value.Year < 1900 || end.Value.Year > 9998 || end <= start)
+            {
                 return BadRequest(new { message = "Choose a valid planned start and end." });
+            }
+
             var schedules = await scheduleService.GetSchedulesAsync(start, end, ct);
             var bookings = schedules
                 .Where(s => s.VesselScheduleId != scheduleId && s.Status != MsapConstants.VesselScheduleStatus.Cancelled)
@@ -198,7 +220,11 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
 
         private async Task MarkConflictsAsync(VesselScheduleBoardViewModel board, DateTime from, DateTime to, CancellationToken ct)
         {
-            if (board.Schedules.Count == 0) return;
+            if (board.Schedules.Count == 0)
+            {
+                return;
+            }
+
             var tugboats = board.Tugboats.Count > 0 ? board.Tugboats : await unitOfWork.Tugboat.GetAllAsync(null, ct);
             var names = tugboats.ToDictionary(t => t.TugboatId, t => t.TugboatName);
             // ponytail: pairwise checks in the displayed window; index resource intervals if schedule volume grows.
@@ -212,7 +238,10 @@ namespace IBSWeb.MSAP.Areas.MSAP.Controllers
                     for (var day = start.Date; day < end; day = day.AddDays(1))
                     {
                         if (!board.ConflictsByDay.TryGetValue(day, out var ids))
+                        {
                             board.ConflictsByDay[day] = ids = [];
+                        }
+
                         ids.Add(schedule.VesselScheduleId);
                         ids.Add(conflict.ConflictingScheduleId);
                     }
