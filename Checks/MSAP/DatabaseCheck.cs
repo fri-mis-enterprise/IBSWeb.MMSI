@@ -90,9 +90,9 @@ namespace Checks.MSAP
                 await RoleCheck.RunAsync(users, identityServices.GetRequiredService<RoleManager<IdentityRole>>(), dashboardWork);
                 var roles = new RoleService(users);
                 var access = new AccessControlService(users, new UserAccessService(dashboardWork, users, roles, NullLogger<UserAccessService>.Instance));
-                var dashboard = new IBSWeb.MSAP.Areas.MSAP.Controllers.HomeController(users, module, access,
+                var dashboard = new IBSWeb.Areas.MSAP.Controllers.HomeController(users, module, access,
                     new VesselScheduleService(dashboardWork, NullLogger<VesselScheduleService>.Instance),
-                    NullLogger<IBSWeb.MSAP.Areas.MSAP.Controllers.HomeController>.Instance);
+                    NullLogger<IBSWeb.Areas.MSAP.Controllers.HomeController>.Instance);
                 var identity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "shared-check"), new Claim("Company", "Filpride")], "check");
                 dashboard.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) } };
                 var dashboardModel = (DashboardCountViewModel)((ViewResult)await dashboard.Index(default)).Model!;
@@ -191,8 +191,8 @@ namespace Checks.MSAP
 
                 module.ChangeTracker.Clear();
                 var importHttp = new DefaultHttpContext { User = new ClaimsPrincipal(identity) };
-                var importer = new IBSWeb.MSAP.Areas.MSAP.Controllers.MsapImportController(module,
-                    NullLogger<IBSWeb.MSAP.Areas.MSAP.Controllers.MsapImportController>.Instance)
+                var importer = new IBSWeb.Areas.MSAP.Controllers.MsapImportController(module,
+                    NullLogger<IBSWeb.Areas.MSAP.Controllers.MsapImportController>.Instance)
                 {
                     ControllerContext = new ControllerContext { HttpContext = importHttp },
                     TempData = tempData.GetTempData(importHttp)

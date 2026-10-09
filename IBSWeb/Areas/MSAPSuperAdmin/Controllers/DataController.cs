@@ -67,7 +67,7 @@ namespace IBSWeb.Areas.MSAPSuperAdmin.Controllers
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "GetData failed for {Table}", table);
+                logger.LogError(ex, "GetData failed for {Table}", table.Replace("\r", string.Empty).Replace("\n", string.Empty));
                 return Json(new { draw = parameters.Draw, recordsTotal = 0, recordsFiltered = 0, data = Array.Empty<object>() });
             }
         }

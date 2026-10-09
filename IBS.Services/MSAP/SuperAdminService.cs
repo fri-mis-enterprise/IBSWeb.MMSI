@@ -343,7 +343,7 @@ namespace IBS.Services.MSAP
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "SuperAdmin Save failed for {Table}#{Id}", table, id);
+                logger.LogError(ex, "SuperAdmin Save failed for {Table}#{Id}", table.Replace("\r", string.Empty).Replace("\n", string.Empty), id);
                 return ServiceResult.Failure($"Save failed: {ExceptionHelper.GetErrorMessage(ex)}");
             }
         }

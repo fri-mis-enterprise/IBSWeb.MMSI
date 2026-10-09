@@ -12,12 +12,26 @@ namespace IBS.Services.MSAP
 
         private string GetFilePath(string fileName)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+            string relativePath = string.Empty;
+            foreach (string segment in fileName.Replace('\\', '/').Split('/'))
+            {
+                if (segment is "" or "." or ".." || segment.Contains(':')
+                    || segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+                    || segment.Any(char.IsControl))
+                {
+                    throw new ArgumentException("The file must use a relative path within MSAP storage.", nameof(fileName));
+                }
+
+                relativePath = Path.Combine(relativePath, Path.GetFileName(segment));
+            }
+
             var storageRoot = Path.GetFullPath(_storagePath);
             if (!Path.EndsInDirectorySeparator(storageRoot))
             {
                 storageRoot += Path.DirectorySeparatorChar;
             }
-            var path = Path.GetFullPath(fileName, storageRoot);
+            var path = Path.GetFullPath(relativePath, storageRoot);
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             if (!path.StartsWith(storageRoot, comparison))
             {
@@ -111,7 +125,7 @@ namespace IBS.Services.MSAP
                     await fileToUpload.CopyToAsync(stream);
                 }
 
-                _logger.LogInformation("File uploaded successfully: {FilePath}", filePath);
+                _logger.LogInformation("File uploaded successfully: {FilePath}", filePath.Replace("\r", string.Empty).Replace("\n", string.Empty));
                 return filePath;
             }
             catch (Exception ex)

@@ -75,7 +75,7 @@ Check(services.GetRequiredService<IBS.DataAccess.Repository.IRepository.IUnitOfW
 Check(services.GetRequiredService<IBS.DataAccess.MSAP.Repository.IRepository.IUnitOfWork>().GetType() == typeof(IBS.DataAccess.MSAP.Repository.UnitOfWork), "MSAP unit of work is missing.");
 
 var actions = services.GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items.OfType<ControllerActionDescriptor>().ToList();
-var moduleActions = actions.Where(a => a.ControllerTypeInfo.Namespace?.StartsWith("IBSWeb.MSAP.", StringComparison.Ordinal) == true).ToList();
+var moduleActions = actions.Where(a => a.ControllerTypeInfo.Namespace?.StartsWith("IBSWeb.Areas.MSAP", StringComparison.Ordinal) == true).ToList();
 Check(moduleActions.Select(a => a.ControllerTypeInfo).Distinct().Count() == 30, "An imported controller is missing.");
 Check(moduleActions.All(a => a.RouteValues["area"] is "MSAP" or "MSAPAdmin" or "MSAPSuperAdmin"), "An MSAP controller collides with a base area.");
 Check(moduleActions.All(action => action.FilterDescriptors.Any(filter =>
@@ -146,13 +146,34 @@ new MsapJsonResultFilter().OnResultExecuting(new ResultExecutingContext(new Acti
 Check(baseResult.SerializerSettings == null, "MSAP changed base JSON options.");
 Console.WriteLine($"PASS: {moduleActions.Select(a => a.ControllerTypeInfo).Distinct().Count()} controllers, routes, DI, view isolation, schema/migrations, audit ownership and scoped JSON.");
 var storage = services.GetRequiredService<ICloudStorageService>();
-try
+string[] unsafePaths =
+[
+    "../outside.txt", @"..\outside.txt", "/outside.txt", @"C:\outside.txt",
+    "checks/../../outside.txt", "checks/../outside.txt", "checks//file.txt",
+    "checks/file.txt:stream", "checks/line\r\nbreak.txt", ""
+];
+foreach (string unsafePath in unsafePaths)
 {
-    await storage.GetSignedUrlAsync("../outside.txt");
-    throw new InvalidOperationException("MSAP storage allows escaping its directory.");
-}
-catch (ArgumentException)
-{
+    using var content = new MemoryStream("msap"u8.ToArray());
+    var upload = new FormFile(content, 0, content.Length, "check", "check.txt");
+    Func<Task>[] operations =
+    [
+        () => storage.UploadFileAsync(upload, unsafePath),
+        () => storage.GetSignedUrlAsync(unsafePath),
+        () => storage.DownloadFileAsync(unsafePath),
+        () => storage.DeleteFileAsync(unsafePath)
+    ];
+    foreach (Func<Task> operation in operations)
+    {
+        try
+        {
+            await operation();
+            throw new InvalidOperationException("MSAP storage accepted an unsafe path.");
+        }
+        catch (ArgumentException)
+        {
+        }
+    }
 }
 var fileName = $"checks/{Guid.NewGuid():N}.txt";
 try
@@ -168,6 +189,7 @@ finally
 {
     await storage.DeleteFileAsync(fileName);
 }
+Console.WriteLine("PASS: unsafe storage paths rejected for upload, URL, download and deletion; nested attachment round-trip.");
 if (args.Contains("--database", StringComparer.Ordinal))
 {
     await Checks.MSAP.DatabaseCheck.RunAsync(storage, services.GetRequiredService<ITempDataDictionaryFactory>());

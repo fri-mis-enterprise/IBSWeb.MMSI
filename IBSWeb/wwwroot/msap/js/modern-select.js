@@ -23,15 +23,19 @@ const ModernSelect = {
         const selectId = $select.attr('id') || $select.attr('name') || '';
         const testId = $select.attr('data-testid') || (selectId ? `select-${selectId}` : '');
         const triggerTestId = testId ? `${testId}-trigger` : '';
-        const testIdAttr = triggerTestId ? `data-testid="${triggerTestId}"` : '';
 
         const $container = $('<div class="modern-select-container"></div>');
         const $trigger = $(`
-            <div class="modern-select-trigger" ${testIdAttr} tabindex="0">
-                <span class="selected-text">${placeholder}</span>
+            <div class="modern-select-trigger" tabindex="0">
+                <span class="selected-text"></span>
                 <span class="material-symbols-outlined">expand_more</span>
             </div>
         `);
+
+        $trigger.find('.selected-text').text(placeholder);
+        if (triggerTestId) {
+            $trigger.attr('data-testid', triggerTestId);
+        }
 
         const $dropdown = $('<div class="modern-select-dropdown"></div>');
 
@@ -260,7 +264,9 @@ const ModernSelect = {
         // Sync back if select changes externally (e.g., cascading)
         $select.on('change', function() {
             const val = $select.val();
-            const $selectedOption = $optionsContainer.find(`.modern-select-option[data-value="${val}"]`);
+            const $selectedOption = $optionsContainer.find('.modern-select-option').filter(function() {
+                return $(this).attr('data-value') === val;
+            });
 
             if ($selectedOption.length) {
                 $trigger.find('.selected-text').text($selectedOption.text());
@@ -303,7 +309,10 @@ const ModernSelect = {
             if (!val && !text.includes('--')) return; // Skip empty placeholder options if they aren't explicit
 
             const isSelected = val == currentVal;
-            const $opt = $(`<div class="modern-select-option ${isSelected ? 'selected' : ''}" data-value="${val}">${text}</div>`);
+            const $opt = $('<div class="modern-select-option"></div>')
+                .toggleClass('selected', isSelected)
+                .attr('data-value', val)
+                .text(text);
             $optionsContainer.append($opt);
 
             if (isSelected) {
