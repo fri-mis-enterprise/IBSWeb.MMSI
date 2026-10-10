@@ -615,6 +615,11 @@
                     return;
                 }
 
+                if ($('.bill-checkbox:checked').length === 0) {
+                    ModernAlert.alert("Billing Required", "Select at least one outstanding billing to collect.", "warning");
+                    return;
+                }
+
                 // Clear any existing hidden billing payments
                 $('input[name^="BillingPayments"]').remove();
 

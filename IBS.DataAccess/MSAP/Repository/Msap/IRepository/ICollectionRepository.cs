@@ -6,6 +6,8 @@ namespace IBS.DataAccess.MSAP.Repository.Msap.IRepository
 {
     public interface ICollectionRepository : IRepository<Collection>
     {
+        Task<Collection?> GetForUpdateAsync(int id, CancellationToken ct = default);
+
         Task SaveAsync(CancellationToken cancellationToken);
 
         Task<List<SelectListItem>> GetMsapCustomersById(CancellationToken cancellationToken = default);

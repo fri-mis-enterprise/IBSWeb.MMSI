@@ -1,5 +1,6 @@
 using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Models.MSAP;
+using IBS.Models.MSAP.MasterFile;
 using IBS.Models.MSAP.ViewModels;
 using IBS.Utility.MSAP.Constants;
 using IBS.Utility.MSAP.Helpers;
@@ -24,26 +25,89 @@ namespace IBS.Services.MSAP
             return collection;
         }
 
-        private async Task<string?> ValidateProgressAsync(CreateCollectionViewModel model, CancellationToken ct)
+        private static (decimal Ewt, decimal Wvat, decimal Net) GetSettlementAmounts(Billing billing, Customer customer, decimal gross)
         {
-            if (model.BillingPayments == null)
+            decimal ewt = customer.WithHoldingTax && billing.BilledTo == MsapConstants.BilledToLocal
+                ? Math.Round(billing.IsVatable ? gross / VatMultiplier * EwtRate : gross * EwtRate, 2) : 0;
+            decimal wvat = customer.WithHoldingVat && billing.BilledTo == MsapConstants.BilledToLocal && billing.IsVatable
+                ? Math.Round(gross / VatMultiplier * WvatRate, 2) : 0;
+            return (ewt, wvat, Math.Round(gross - ewt - wvat, 2));
+        }
+
+        private async Task<Dictionary<int, decimal>> GetSettlementAllocationsAsync(CreateCollectionViewModel model, CancellationToken ct)
+        {
+            if (model.BillingPayments == null || model.BillingPayments.Count == 0)
             {
-                return null;
+                throw new InvalidOperationException("Select at least one outstanding billing to collect.");
             }
+            if (model.BillingPayments.Select(p => p.BillingId).Distinct().Count() != model.BillingPayments.Count)
+            {
+                throw new InvalidOperationException("Each billing can only be allocated once in a collection.");
+            }
+            if (model.Amount != model.BillingPayments.Sum(p => p.AmountToPay) || model.Amount != model.CashAmount + model.CheckAmount
+                || model.CashAmount < 0 || model.CheckAmount < 0 || model.EWT < 0 || model.WVAT < 0)
+            {
+                throw new InvalidOperationException("Cash plus check must match the allocated net payments. Withholding amounts are recorded separately.");
+            }
+            var customer = await unitOfWork.Customer.GetAsync(c => c.CustomerId == model.CustomerId, ct)
+                ?? throw new InvalidOperationException("Customer not found.");
+            List<int> ids = model.BillingPayments.Select(p => p.BillingId).ToList();
+            if (model.MsapCollectionId.HasValue)
+            {
+                ids.AddRange((await unitOfWork.Billing.GetAllAsync(b => b.CollectionId == model.MsapCollectionId, ct)).Select(b => b.MsapBillingId));
+            }
+            var locked = new Dictionary<int, Billing>();
+            foreach (int id in ids.Distinct().Order())
+            {
+                locked[id] = await unitOfWork.Billing.GetForUpdateAsync(id, ct)
+                    ?? throw new InvalidOperationException("Selected billing not found.");
+            }
+            var allocations = new Dictionary<int, decimal>();
+            decimal totalEwt = 0;
+            decimal totalWvat = 0;
             foreach (var payment in model.BillingPayments)
             {
-                var billing = await unitOfWork.Billing.GetAsync(b => b.MsapBillingId == payment.BillingId, ct);
-                if (billing == null || billing.Status is not (MsapConstants.BillingStatus.ForCollection or MsapConstants.BillingStatus.Collected))
+                var billing = locked[payment.BillingId];
+                if (billing.CustomerId != model.CustomerId)
                 {
-                    return "Only posted billings can receive collection. Review and post all billings first.";
+                    throw new InvalidOperationException("Selected billings must belong to the collection customer.");
+                }
+                if (billing.CollectionId.HasValue && billing.CollectionId != model.MsapCollectionId)
+                {
+                    throw new InvalidOperationException($"Billing #{billing.MsapBillingNumber} already belongs to a collection. Review or edit that receipt instead of creating another.");
+                }
+                if (billing.Status is not (MsapConstants.BillingStatus.ForCollection or MsapConstants.BillingStatus.Collected))
+                {
+                    throw new InvalidOperationException("Only posted billings can receive collection. Review and post all billings first.");
+                }
+                if (model.JobOrderId.HasValue && billing.JobOrderId != model.JobOrderId
+                    && await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == model.JobOrderId && t.BillingId == billing.MsapBillingId, ct) == null)
+                {
+                    throw new InvalidOperationException("Selected billing does not belong to this Job Order.");
                 }
                 string? blocker = await JobProgressCalculator.GetBillingBlockerAsync(unitOfWork, billing, JobProgressCalculator.CollectionStage, ct);
                 if (blocker != null)
                 {
-                    return blocker;
+                    throw new InvalidOperationException(blocker);
                 }
+                decimal available = billing.Balance + (billing.CollectionId.HasValue ? billing.AmountPaid : 0);
+                var due = GetSettlementAmounts(billing, customer, available);
+                if (available <= 0 || payment.AmountToPay <= 0 || payment.AmountToPay > due.Net)
+                {
+                    throw new InvalidOperationException($"Payment for billing #{billing.MsapBillingNumber} must be positive and cannot exceed its remaining net balance ({due.Net:N2}).");
+                }
+                decimal proportion = payment.AmountToPay / due.Net;
+                decimal ewt = Math.Round(due.Ewt * proportion, 2);
+                decimal wvat = Math.Round(due.Wvat * proportion, 2);
+                allocations[payment.BillingId] = payment.AmountToPay == due.Net ? available : payment.AmountToPay + ewt + wvat;
+                totalEwt += ewt;
+                totalWvat += wvat;
             }
-            return null;
+            if (model.EWT != totalEwt || model.WVAT != totalWvat)
+            {
+                throw new InvalidOperationException("Withholding amounts do not match the selected billing payments. Reload the billings and review the withholding totals.");
+            }
+            return allocations;
         }
 
         public async Task<ServiceResult<int>> CreateCollectionAsync(CreateCollectionViewModel viewModel, string username, CancellationToken cancellationToken)
@@ -56,15 +120,11 @@ namespace IBS.Services.MSAP
                     return ServiceResult<int>.Failure(guard.Message!);
                 }
 
-                string? progressBlocker = await ValidateProgressAsync(viewModel, cancellationToken);
-                if (progressBlocker != null)
-                {
-                    return ServiceResult<int>.Failure(progressBlocker);
-                }
-
                 int collectionId = 0;
                 await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    viewModel.MsapCollectionId = null;
+                    var allocations = await GetSettlementAllocationsAsync(viewModel, cancellationToken);
                     var model = await MapToEntityAsync(viewModel, cancellationToken);
                     model.CreatedBy = username;
                     model.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
@@ -76,13 +136,6 @@ namespace IBS.Services.MSAP
                     else
                     {
                         model.MsapCollectionNumber = viewModel.MsapCollectionNumber ?? string.Empty;
-                    }
-
-                    // Validate matching amounts
-                    decimal totalAllocated = viewModel.BillingPayments?.Sum(p => p.AmountToPay) ?? 0;
-                    if (totalAllocated != viewModel.Amount && !model.IsUndocumented)
-                    {
-                        throw new InvalidOperationException($"Collection amount ({viewModel.Amount:N2}) does not match the total allocated billing payments ({totalAllocated:N2}).");
                     }
 
                     await unitOfWork.Collection.AddAsync(model, cancellationToken);
@@ -100,7 +153,7 @@ namespace IBS.Services.MSAP
                             {
                                 billing.CollectionId = model.MsapCollectionId;
                                 billing.CollectionNumber = model.MsapCollectionNumber;
-                                await unitOfWork.Collection.UpdateBillingPayment(payment.BillingId, payment.AmountToPay, cancellationToken);
+                                await unitOfWork.Collection.UpdateBillingPayment(payment.BillingId, allocations[payment.BillingId], cancellationToken);
                                 model.PaidBills.Add(billing);
                             }
                         }
@@ -132,7 +185,8 @@ namespace IBS.Services.MSAP
             {
                 await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    var currentModel = await unitOfWork.Collection.GetAsync(c => c.MsapCollectionId == viewModel.MsapCollectionId, cancellationToken);
+                    var currentModel = viewModel.MsapCollectionId.HasValue
+                        ? await unitOfWork.Collection.GetForUpdateAsync(viewModel.MsapCollectionId.Value, cancellationToken) : null;
                     if (currentModel == null)
                     {
                         throw new InvalidOperationException("Collection not found.");
@@ -154,27 +208,16 @@ namespace IBS.Services.MSAP
                         throw new InvalidOperationException("Cannot edit a collection that has already been printed.");
                     }
 
-                    string? progressBlocker = await ValidateProgressAsync(viewModel, cancellationToken);
-                    if (progressBlocker != null)
-                    {
-                        throw new InvalidOperationException(progressBlocker);
-                    }
+                    var allocations = await GetSettlementAllocationsAsync(viewModel, cancellationToken);
 
                     // Revert old allocations
                     var oldBillings = await unitOfWork.Billing.GetAllAsync(b => b.CollectionId == currentModel.MsapCollectionId, cancellationToken);
                     foreach (var billing in oldBillings)
                     {
                         billing.Status = MsapConstants.BillingStatus.ForCollection;
-                        billing.CollectionId = 0;
+                        billing.CollectionId = null;
                         billing.CollectionNumber = null;
                         await unitOfWork.Collection.RemoveBillingPayment(billing.MsapBillingId, billing.AmountPaid, 0, cancellationToken);
-                    }
-
-                    // Apply new allocations
-                    decimal totalAllocated = viewModel.BillingPayments?.Sum(p => p.AmountToPay) ?? 0;
-                    if (totalAllocated != viewModel.Amount && !currentModel.IsUndocumented)
-                    {
-                        throw new InvalidOperationException($"Collection amount (₱{viewModel.Amount:N2}) does not match the total allocated billing payments (₱{totalAllocated:N2}).");
                     }
 
                     if (viewModel.BillingPayments != null)
@@ -186,7 +229,7 @@ namespace IBS.Services.MSAP
                             {
                                 billing.CollectionId = currentModel.MsapCollectionId;
                                 billing.CollectionNumber = currentModel.MsapCollectionNumber;
-                                await unitOfWork.Collection.UpdateBillingPayment(payment.BillingId, payment.AmountToPay, cancellationToken);
+                                await unitOfWork.Collection.UpdateBillingPayment(payment.BillingId, allocations[payment.BillingId], cancellationToken);
                             }
                         }
                     }
@@ -306,28 +349,19 @@ namespace IBS.Services.MSAP
                     .DistinctBy(b => b.MsapBillingId)
                     .Select(b =>
                     {
-                        decimal ewt = 0;
-                        if (customer.WithHoldingTax && b.BilledTo == MsapConstants.BilledToLocal)
-                        {
-                            ewt = b.IsVatable ? (b.Amount / VatMultiplier) * EwtRate : b.Amount * EwtRate;
-                        }
-
-                        decimal wvat = 0;
-                        if (customer.WithHoldingVat && b.BilledTo == MsapConstants.BilledToLocal)
-                        {
-                            wvat = b.IsVatable ? (b.Amount / VatMultiplier) * WvatRate : 0;
-                        }
+                        decimal available = b.Balance + (collectionId.HasValue && b.CollectionId == collectionId ? b.AmountPaid : 0);
+                        var settlement = GetSettlementAmounts(b, customer, available);
 
                         return new
                         {
                             msapBillingId = b.MsapBillingId,
                             msapBillingNumber = b.MsapBillingNumber,
                             date = b.Date,
-                            amount = b.Amount,
+                            amount = available,
                             balance = b.Balance,
-                            ewt = Math.Round(ewt, 2),
-                            wvat = Math.Round(wvat, 2),
-                            net = Math.Round(b.Amount - ewt - wvat, 2),
+                            ewt = settlement.Ewt,
+                            wvat = settlement.Wvat,
+                            net = settlement.Net,
                             isVatable = b.IsVatable,
                             isSelected = collectionId.HasValue && b.CollectionId == collectionId.Value
                         };

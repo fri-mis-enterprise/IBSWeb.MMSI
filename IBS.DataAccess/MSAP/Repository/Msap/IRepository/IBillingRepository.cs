@@ -6,6 +6,8 @@ namespace IBS.DataAccess.MSAP.Repository.Msap.IRepository
 {
     public interface IBillingRepository : IRepository<Billing>
     {
+        Task<Billing?> GetForUpdateAsync(int id, CancellationToken ct = default);
+
         Task SaveAsync(CancellationToken cancellationToken);
 
         Task<List<string>?> GetToBillDispatchTicketListAsync(int billingId, CancellationToken cancellationToken = default);

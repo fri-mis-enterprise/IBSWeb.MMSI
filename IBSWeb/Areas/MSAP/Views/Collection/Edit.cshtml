@@ -337,7 +337,7 @@
                             defaultContent: '',
                             render: function(data, type, row) {
                                 const checked = row.isSelected ? 'checked' : '';
-                                return `<input type="checkbox" class="bill-checkbox form-check-input" value="${data}" data-gross="${row.amount}" data-ewt="${row.ewt}" data-net="${row.net}" ${checked} style="width: 18px; height: 18px; cursor: pointer;">`;
+                                return `<input type="checkbox" class="bill-checkbox form-check-input" value="${data}" data-gross="${row.amount}" data-ewt="${row.ewt}" data-wvat="${row.wvat}" data-net="${row.net}" ${checked} style="width: 18px; height: 18px; cursor: pointer;">`;
                             }
                         },
                         {
@@ -495,7 +495,7 @@
             function updateSelectedBillings() {
                 clearTimeout(updateTimeout);
                 updateTimeout = setTimeout(() => {
-                    let grossTotal = 0, ewtTotal = 0, netTotal = 0;
+                    let grossTotal = 0, ewtTotal = 0, wvatTotal = 0, netTotal = 0;
                     const $hiddenSelect = $('#hiddenBillingsSelect');
                     $hiddenSelect.empty();
 
@@ -503,10 +503,12 @@
                         const id = $(this).val();
                         const gross = parseFloat($(this).data('gross'));
                         const ewt = parseFloat($(this).data('ewt'));
+                        const wvat = parseFloat($(this).data('wvat')) || 0;
                         const net = parseFloat($(this).data('net'));
 
                         grossTotal += gross;
                         ewtTotal += ewt;
+                        wvatTotal += wvat;
                         netTotal += net;
 
                         $hiddenSelect.append(`<option value="${id}" selected>${id}</option>`);
@@ -518,13 +520,12 @@
                     $('#netAmountDisplay').text(`₱${formatNumber(netTotal)}`);
 
                     $('#ewt').val(ewtTotal.toFixed(2));
+                    $('#wvat').val(wvatTotal > 0 ? wvatTotal.toFixed(2) : '');
 
                     const currentCash = parseFloat($('#cashAmount').val()) || 0;
                     const currentCheck = parseFloat($('#checkAmount').val()) || 0;
-                    const currentWvat = parseFloat($('#wvat').val()) || 0;
 
-                    // Auto-fill checkAmount if cash and wvat are 0 and check is either 0 or was previously auto-filled
-                    if (currentCash === 0 && currentWvat === 0 && (currentCheck === 0 || $('#checkAmount').data('auto-filled') === true)) {
+                    if (currentCash === 0 && (currentCheck === 0 || $('#checkAmount').data('auto-filled') === true)) {
                         $('#checkAmount').val(netTotal > 0 ? netTotal.toFixed(2) : '').data('auto-filled', true);
                     }
 
@@ -535,10 +536,9 @@
             function calculateManualTotal(triggeredBy) {
                 const cash = parseFloat($('#cashAmount').val()) || 0;
                 const check = parseFloat($('#checkAmount').val()) || 0;
-                const wvat = parseFloat($('#wvat').val()) || 0;
                 const netToMatch = parseFloat($('#netAmountDisplay').text().replace('₱', '').replace(/,/g, '').trim()) || 0;
 
-                let total = cash + check + wvat;
+                let total = cash + check;
 
                 // Auto-balancing: If total exceeds net and we know which field to adjust
                 if (netToMatch > 0 && total > netToMatch) {
@@ -546,7 +546,7 @@
                     if (triggeredBy === 'cash' && $('#checkAmount').data('auto-filled') === true) {
                         const newCheck = Math.max(0, check - excess);
                         $('#checkAmount').val(newCheck > 0 ? newCheck.toFixed(2) : '');
-                        total = cash + newCheck + wvat;
+                        total = cash + newCheck;
                     }
                 }
 
@@ -565,6 +565,11 @@
             function areYouSureToUpdate(event) {
                 event.preventDefault();
                 if (!ModernFormValidator.validate('myForm')) return;
+
+                if ($('.bill-checkbox:checked').length === 0) {
+                    ModernAlert.alert("Billing Required", "Select at least one outstanding billing to collect.", "warning");
+                    return;
+                }
 
                 // Clear any existing hidden billing payments
                 $('input[name^="BillingPayments"]').remove();

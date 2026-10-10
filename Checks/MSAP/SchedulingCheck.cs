@@ -202,11 +202,102 @@ namespace Checks.MSAP
                 await db.SaveChangesAsync();
                 Check(!(await progressCollection.CreateCollectionAsync(new IBS.Models.MSAP.ViewModels.CreateCollectionViewModel
                 {
-                    Date = order.Date, BillingPayments = [new IBS.Models.MSAP.ViewModels.BillingPaymentViewModel { BillingId = progressBill.MsapBillingId, AmountToPay = 100 }]
+                    Date = order.Date, CustomerId = customer.CustomerId, Amount = 100, CashAmount = 100,
+                    BillingPayments = [new IBS.Models.MSAP.ViewModels.BillingPaymentViewModel { BillingId = progressBill.MsapBillingId, AmountToPay = 100 }]
                 }, "check", default)).IsSuccess, "Collection ignored unfinished billing on another ticket.");
+                customer = await db.Customers.SingleAsync(c => c.CustomerId == customer.CustomerId);
+                ticket = await db.MsapDispatchTickets.SingleAsync(t => t.DispatchTicketId == ticket.DispatchTicketId);
+                unfinished = await db.MsapDispatchTickets.SingleAsync(t => t.DispatchTicketId == unfinished.DispatchTicketId);
+                progressBill = await db.MsapBillings.SingleAsync(b => b.MsapBillingId == progressBill.MsapBillingId);
+                customer.WithHoldingVat = true;
+                progressBill.IsVatable = true;
+                progressBill.Amount = progressBill.Balance = 112;
+                unfinished.Status = MsapConstants.DispatchTicketStatus.Billed;
+                unfinished.BillingId = progressBill.MsapBillingId;
+                var settlementSplit = new Billing
+                {
+                    MsapBillingNumber = "SETTLE-BAF", Date = order.Date, Status = MsapConstants.BillingStatus.ForCollection,
+                    BilledTo = "LOCAL", CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId,
+                    TerminalId = terminal.TerminalId, CreatedBy = "check", JobOrderId = order.JobOrderId, IsVatable = true, Amount = 56, Balance = 56
+                };
+                db.Add(settlementSplit);
+                await db.SaveChangesAsync();
+                var settlementRequest = new IBS.Models.MSAP.ViewModels.CreateCollectionViewModel
+                {
+                    Date = order.Date, CustomerId = customer.CustomerId, JobOrderId = order.JobOrderId, MsapCollectionNumber = "SETTLE-CR",
+                    Amount = 160.5m, CashAmount = 160.5m, WVAT = 7.5m,
+                    BillingPayments = [new() { BillingId = progressBill.MsapBillingId, AmountToPay = 107 }, new() { BillingId = settlementSplit.MsapBillingId, AmountToPay = 53.5m }]
+                };
+                settlementRequest.WVAT = 0;
+                Check(!(await progressCollection.CreateCollectionAsync(settlementRequest, "check", default)).IsSuccess
+                    && !await db.MsapCollections.AnyAsync(), "Incorrect withholding created a collection.");
+                settlementRequest.WVAT = 7.5m;
+                settlementRequest.Amount = settlementRequest.CashAmount = 168;
+                settlementRequest.BillingPayments![0].AmountToPay = 112;
+                settlementRequest.BillingPayments[1].AmountToPay = 56;
+                Check(!(await progressCollection.CreateCollectionAsync(settlementRequest, "check", default)).IsSuccess
+                    && !await db.MsapCollections.AnyAsync(), "Payment above the remaining net balance created a collection.");
+                settlementRequest.Amount = settlementRequest.CashAmount = 160.5m;
+                settlementRequest.BillingPayments[0].AmountToPay = 107;
+                settlementRequest.BillingPayments[1].AmountToPay = 53.5m;
+                async Task<ServiceResult<int>> CollectInNewContext(string number)
+                {
+                    await using var isolated = new MsapDbContext(options);
+                    var request = new IBS.Models.MSAP.ViewModels.CreateCollectionViewModel
+                    {
+                        Date = settlementRequest.Date, CustomerId = settlementRequest.CustomerId, JobOrderId = settlementRequest.JobOrderId,
+                        MsapCollectionNumber = number, Amount = settlementRequest.Amount, CashAmount = settlementRequest.CashAmount, WVAT = settlementRequest.WVAT,
+                        BillingPayments = settlementRequest.BillingPayments.Select(p => new IBS.Models.MSAP.ViewModels.BillingPaymentViewModel
+                        {
+                            BillingId = p.BillingId, AmountToPay = p.AmountToPay
+                        }).ToList()
+                    };
+                    return await new CollectionService(new UnitOfWork(isolated, shared), NullLogger<CollectionService>.Instance)
+                        .CreateCollectionAsync(request, "check", default);
+                }
+                var concurrentCollections = await Task.WhenAll(CollectInNewContext("SETTLE-A"), CollectInNewContext("SETTLE-B"));
+                Check(concurrentCollections.Count(r => r.IsSuccess) == 1 && await db.MsapCollections.CountAsync() == 1,
+                    "Concurrent collection submissions paid the same split bills twice.");
+                var settled = concurrentCollections.Single(r => r.IsSuccess);
+                settlementRequest.MsapCollectionNumber = (await db.MsapCollections.SingleAsync(c => c.MsapCollectionId == settled.Data)).MsapCollectionNumber;
+                progressBill = await db.MsapBillings.SingleAsync(b => b.MsapBillingId == progressBill.MsapBillingId);
+                settlementSplit = await db.MsapBillings.SingleAsync(b => b.MsapBillingId == settlementSplit.MsapBillingId);
+                Check(progressBill.Balance == 0 && settlementSplit.Balance == 0
+                    && (await JobProgressCalculator.LoadAsync(work, order, booking, default)).Stage == 8,
+                    "Split billing remains collectible after receiving the full net payment and withholding VAT.");
+                settlementRequest.MsapCollectionId = settled.Data;
+                Check((await progressCollection.UpdateCollectionAsync(settlementRequest, "check", default)).IsSuccess
+                    && progressBill.Balance == 0 && settlementSplit.Balance == 0, "Editing a settled split collection failed or counted withholding twice.");
+                settlementRequest.MsapCollectionId = null;
+                settlementRequest.MsapCollectionNumber = "DUP-CR";
+                Check(!(await progressCollection.CreateCollectionAsync(settlementRequest, "check", default)).IsSuccess,
+                    "A second collection paid already settled split bills.");
+                Check(await db.MsapCollections.CountAsync() == 1 && progressBill.CollectionId == settled.Data && settlementSplit.CollectionId == settled.Data,
+                    "Duplicate collection replaced receipt links or left an extra collection.");
+                var receipt = await progressCollection.GetCollectionByIdAsync(settled.Data, default);
+                var receiptProgress = await JobProgressCalculator.LoadForBillingsAsync(work, receipt!.PaidBills!.Select(b => b.MsapBillingId), default);
+                Check(receiptProgress.Count == 1 && receiptProgress[0].Stage == 8, "Split collection preview lost Job Progress.");
+                Check(!(await progressCollection.CreateCollectionAsync(new IBS.Models.MSAP.ViewModels.CreateCollectionViewModel
+                {
+                    Date = order.Date, CustomerId = customer.CustomerId, JobOrderId = order.JobOrderId, MsapCollectionNumber = "EMPTY-CR"
+                }, "check", default)).IsSuccess && await db.MsapCollections.CountAsync() == 1, "Empty collection bypassed selection validation.");
+                customer = await db.Customers.SingleAsync(c => c.CustomerId == customer.CustomerId);
+                ticket = await db.MsapDispatchTickets.SingleAsync(t => t.DispatchTicketId == ticket.DispatchTicketId);
+                unfinished = await db.MsapDispatchTickets.SingleAsync(t => t.DispatchTicketId == unfinished.DispatchTicketId);
+                progressBill = await db.MsapBillings.SingleAsync(b => b.MsapBillingId == progressBill.MsapBillingId);
+                settlementSplit = await db.MsapBillings.SingleAsync(b => b.MsapBillingId == settlementSplit.MsapBillingId);
+                receipt = await db.MsapCollections.SingleAsync(c => c.MsapCollectionId == settled.Data);
+                progressBill.CollectionId = null;
+                progressBill.CollectionNumber = null;
+                db.Remove(settlementSplit);
+                db.Remove(receipt);
+                customer.WithHoldingVat = false;
+                Console.WriteLine("PASS: split billing settles cash plus withholding, prevents duplicate collection, and retains receipt progress.");
                 ticket.BillingId = null;
                 ticket.Billing = null;
                 ticket.Status = MsapConstants.DispatchTicketStatus.ForTariff;
+                unfinished.BillingId = null;
+                unfinished.Billing = null;
                 db.Remove(progressBill);
                 db.Remove(unfinished);
                 await db.SaveChangesAsync();
