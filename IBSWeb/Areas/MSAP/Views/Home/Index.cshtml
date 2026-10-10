@@ -28,20 +28,8 @@ else
                 <p class="dashboard-muted">Updated @Model.UpdatedAt.ToString("h:mm tt") · Philippine time</p>
             </div>
             <div class="dashboard-actions">
-                <a asp-action="Index" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">refresh</span> Refresh</a>
-                <a asp-controller="VesselSchedule" asp-action="Create" asp-route-date="@dateValue" class="modern-btn-primary"><span class="material-symbols-outlined" aria-hidden="true">add</span> Schedule</a>
-                @if (Model.CanCreateJobOrder || Model.CanCreateDispatch || Model.CanCreateBilling || Model.CanCreateCollection)
-                {
-                    <details class="dashboard-new">
-                        <summary class="modern-btn-secondary">New document <span class="material-symbols-outlined" aria-hidden="true">expand_more</span></summary>
-                        <div class="dashboard-new-menu">
-                            @if (Model.CanCreateJobOrder) { <a asp-controller="JobOrder" asp-action="Create">Job Order</a> }
-                            @if (Model.CanCreateDispatch) { <a asp-controller="DispatchTicket" asp-action="Create">Dispatch Ticket</a> }
-                            @if (Model.CanCreateBilling) { <a asp-controller="Billing" asp-action="Create">Billing</a> }
-                            @if (Model.CanCreateCollection) { <a asp-controller="Collection" asp-action="Create">Collection</a> }
-                        </div>
-                    </details>
-                }
+                <a asp-action="Index" class="modern-btn-secondary text-decoration-none"><span class="material-symbols-outlined" aria-hidden="true">refresh</span> Refresh</a>
+                <a asp-controller="VesselSchedule" asp-action="Create" asp-route-date="@dateValue" class="modern-btn-primary text-decoration-none"><span class="material-symbols-outlined" aria-hidden="true">add</span> Schedule</a>
             </div>
         </header>
 
