@@ -1,4 +1,4 @@
-document.querySelectorAll('[data-schedule-confirm]').forEach(button => {
+document.querySelectorAll('[data-schedule-confirm="true"]').forEach(button => {
     let reviewing = false;
     button.addEventListener('click', async event => {
         event.preventDefault();

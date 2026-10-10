@@ -279,7 +279,7 @@ namespace IBS.Services.MSAP
             return viewModel;
         }
 
-        public async Task<ServiceResult<object>> GetUncollectedBillingsForTableAsync(int customerId, int? collectionId, CancellationToken cancellationToken)
+        public async Task<ServiceResult<object>> GetUncollectedBillingsForTableAsync(int customerId, int? collectionId, CancellationToken cancellationToken, int? jobOrderId = null)
         {
             try
             {
@@ -296,6 +296,12 @@ namespace IBS.Services.MSAP
                     billings.AddRange(alreadyCollected);
                 }
 
+                if (jobOrderId.HasValue)
+                {
+                    IEnumerable<DispatchTicket> tickets = await unitOfWork.DispatchTicket.GetAllAsync(t => t.JobOrderId == jobOrderId.Value && t.BillingId.HasValue, cancellationToken);
+                    List<int> ids = tickets.Select(t => t.BillingId!.Value).ToList();
+                    billings = billings.Where(b => b.JobOrderId == jobOrderId.Value || ids.Contains(b.MsapBillingId)).ToList();
+                }
                 var result = billings
                     .DistinctBy(b => b.MsapBillingId)
                     .Select(b =>

@@ -186,6 +186,41 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
         #endregion
 
+        [RequireAnyAccess(
+            "Access denied. You don't have permission to view Job Orders.",
+            ProcedureEnum.CreateDispatchTicket,
+            ProcedureEnum.EditDispatchTicket,
+            ProcedureEnum.SetTariff,
+            ProcedureEnum.ApproveTariff,
+            ProcedureEnum.CreateBilling,
+            ProcedureEnum.CreateCollection,
+            ProcedureEnum.CreateJobOrder,
+            ProcedureEnum.EditJobOrder,
+            ProcedureEnum.DeleteJobOrder,
+            ProcedureEnum.CloseJobOrder)]
+        public async Task<IActionResult> Progress(int? jobOrderId, List<int>? billingIds, List<int>? dispatchTicketIds, int? actionStage, CancellationToken cancellationToken)
+        {
+            ViewData["JobProgressActionStage"] = actionStage;
+            if (jobOrderId.HasValue)
+            {
+                var job = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == jobOrderId.Value, cancellationToken);
+                if (job == null)
+                {
+                    return NotFound();
+                }
+                var schedule = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == job.JobOrderId, cancellationToken);
+                var progress = await JobProgressCalculator.LoadAsync(unitOfWork, job, schedule, cancellationToken);
+                return PartialView("_JobProgressList", new[] { progress });
+            }
+            if (dispatchTicketIds is { Count: > 0 })
+            {
+                IEnumerable<DispatchTicket> tickets = await unitOfWork.DispatchTicket.GetAllAsync(t => dispatchTicketIds.Contains(t.DispatchTicketId), cancellationToken);
+                IEnumerable<int> jobIds = tickets.Where(t => t.JobOrderId.HasValue).Select(t => t.JobOrderId!.Value);
+                return PartialView("_JobProgressList", await JobProgressCalculator.LoadForJobsAsync(unitOfWork, jobIds, cancellationToken));
+            }
+            return PartialView("_JobProgressList", await JobProgressCalculator.LoadForBillingsAsync(unitOfWork, billingIds ?? [], cancellationToken));
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         [RequireAccess(ProcedureEnum.EditJobOrder)]

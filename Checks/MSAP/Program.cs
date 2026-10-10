@@ -155,6 +155,21 @@ foreach (bool allowed in new[] { false, true })
             TargetId = 123, ActionLabel = "Review Charges"
         };
         var viewData = new ViewDataDictionary<IBS.Models.MSAP.ViewModels.JobProgressViewModel>(services.GetRequiredService<Microsoft.AspNetCore.Mvc.ModelBinding.IModelMetadataProvider>(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary()) { Model = model };
+        if (stage == 1)
+        {
+            model.ActionController = "VesselSchedule";
+            model.ActionName = "Confirm";
+        }
+        if (stage == JobProgressCalculator.PostingStage)
+        {
+            model.ActionController = "Billing";
+            model.ActionName = "Index";
+            model.JobOrderId = 77;
+        }
+        if (stage == JobProgressCalculator.CollectionStage)
+        {
+            viewData["JobProgressActionStage"] = stage;
+        }
         using var output = new StringWriter();
         var viewContext = new ViewContext(actionContext, jobProgressView.View!, viewData,
             services.GetRequiredService<ITempDataDictionaryFactory>().GetTempData(http), output, new HtmlHelperOptions());
@@ -171,7 +186,20 @@ foreach (bool allowed in new[] { false, true })
         {
             Check(html.Contains("disabled", StringComparison.Ordinal), "Tariff must use the ticket row action instead of a duplicate progress action.");
         }
-        if (allowed && stage < 8 && stage != JobProgressCalculator.TariffStage)
+        if (allowed && stage == 1)
+        {
+            Check(html.Contains("data-schedule-confirm=\"true\"", StringComparison.Ordinal), "Only confirmation should trigger the booking review modal.");
+        }
+        if (allowed && stage == JobProgressCalculator.PostingStage)
+        {
+            Check(html.Contains("jobOrderId=77", StringComparison.Ordinal) && html.Contains("For%20Posting", StringComparison.Ordinal)
+                && !html.Contains("data-schedule-confirm=\"true\"", StringComparison.Ordinal), "Posting must open the scoped billing list and bypass confirmation.");
+        }
+        if (allowed && stage == JobProgressCalculator.CollectionStage)
+        {
+            Check(html.Contains("disabled", StringComparison.Ordinal), "Collection form must use its designated save action.");
+        }
+        if (allowed && stage < 8 && stage != 1 && stage != JobProgressCalculator.TariffStage && stage != JobProgressCalculator.PostingStage && stage != JobProgressCalculator.CollectionStage)
         {
             Check(html.Contains("/MSAP/DispatchTicket/Preview/123", StringComparison.Ordinal), "Job Progress next action route is wrong.");
         }

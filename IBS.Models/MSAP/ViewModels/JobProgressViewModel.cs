@@ -15,6 +15,7 @@ namespace IBS.Models.MSAP.ViewModels
         public string ActionName { get; set; } = string.Empty;
         public int? TargetId { get; set; }
         public int? JobOrderId { get; set; }
+        public string? JobOrderNumber { get; set; }
         public ProcedureEnum? Permission { get; set; }
         public string WaitingFor { get; set; } = string.Empty;
         public List<DispatchTicket> Tickets { get; set; } = [];

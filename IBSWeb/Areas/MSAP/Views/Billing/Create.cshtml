@@ -63,6 +63,8 @@
                 </div>
             </div>
 
+            <div id="financialJobProgress" data-progress-url="@Url.Action("Progress", "JobOrder", new { area = "MSAP" })" data-action-stage="5"></div>
+
             <div class="modern-grid">
                 <!-- Left Column: Metadata & Selection (Workflow Step 1) -->
                 <div class="modern-col-4 flex flex-column" style="gap: 1.5rem;">
@@ -338,6 +340,7 @@
 </div>
 
 @section Scripts {
+    <script src="~/msap/js/job-progress.js" asp-append-version="true"></script>
     <script>
         window.IBS_TOUR_STEPS = [
             { step: 1, title: "Customer & Billing Recipient", text: "Select the customer to load their eligible Job Orders and billing defaults. Review the displayed address, TIN, terms, and tax details. If BILL TO PRINCIPAL is available and required, tick it and select the intended principal.", required: false, autoAdvance: false },
@@ -637,6 +640,7 @@
 
             $jobOrderSelect.on('change', async function () {
                 const joId = $(this).val();
+                JobProgress.load(document.getElementById("financialJobProgress"), { jobOrderId: joId });
                 if (!joId) {
                     $ticketsTableBody.html('<tr><td colspan="11" class="text-center py-5 opacity-60 italic">Select a Job Order to view available tickets</td></tr>');
                     $dispatchSelect.empty();
@@ -720,6 +724,9 @@
             }
 
             function rebuildBafTable() {
+                if (!$jobOrderSelect.val()) {
+                    JobProgress.load(document.getElementById("financialJobProgress"), { dispatchTicketIds: $dispatchSelect.val() || [] });
+                }
                 const $body = $("#bafTableBody");
                 $body.empty();
                 $ticketsTableBody.find('.ticket-checkbox:checked').each(function () {

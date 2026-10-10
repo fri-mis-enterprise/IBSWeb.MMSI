@@ -61,6 +61,8 @@
                 </div>
             </div>
 
+            <div id="financialJobProgress" data-progress-url="@Url.Action("Progress", "JobOrder", new { area = "MSAP" })" data-action-stage="7"></div>
+
             <div class="modern-grid">
                 <!-- Left Column: Logistics & Billings (col-8) -->
                 <div class="modern-col-8 flex flex-column" style="gap: 1.25rem;">
@@ -283,6 +285,7 @@
 
 @section Scripts
 {
+    <script src="~/msap/js/job-progress.js" asp-append-version="true"></script>
     <script>
         window.IBS_TOUR_STEPS = [
             { step: 1, title: "Customer", text: "Review the customer for this collection. The customer is read-only during editing; check that this is the payment record you intend to update.", required: false, autoAdvance: false },
@@ -509,6 +512,7 @@
                         $hiddenSelect.append(`<option value="${id}" selected>${id}</option>`);
                     });
 
+                    JobProgress.load(document.getElementById("financialJobProgress"), { billingIds: $hiddenSelect.val() || [] });
                     $('#billingsTotal').text(`₱${formatNumber(grossTotal)}`);
                     $('#ewtTotalDisplay').text(`₱${formatNumber(ewtTotal)}`);
                     $('#netAmountDisplay').text(`₱${formatNumber(netTotal)}`);

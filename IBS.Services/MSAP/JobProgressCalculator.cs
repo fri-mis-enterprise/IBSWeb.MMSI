@@ -23,6 +23,28 @@ namespace IBS.Services.MSAP
             return Calculate(job, schedule, tickets, billings);
         }
 
+        public static async Task<List<JobProgressViewModel>> LoadForBillingsAsync(IUnitOfWork unitOfWork, IEnumerable<int> billingIds, CancellationToken ct)
+        {
+            List<int> ids = billingIds.Distinct().ToList();
+            IEnumerable<Billing> billings = await unitOfWork.Billing.GetAllAsync(b => ids.Contains(b.MsapBillingId), ct);
+            IEnumerable<DispatchTicket> tickets = await unitOfWork.DispatchTicket.GetAllAsync(t => t.BillingId.HasValue && ids.Contains(t.BillingId.Value), ct);
+            List<int> jobIds = billings.Select(b => b.JobOrderId).Concat(tickets.Select(t => t.JobOrderId))
+                .Where(id => id.HasValue).Select(id => id!.Value).Distinct().OrderBy(id => id).ToList();
+            return await LoadForJobsAsync(unitOfWork, jobIds, ct);
+        }
+
+        public static async Task<List<JobProgressViewModel>> LoadForJobsAsync(IUnitOfWork unitOfWork, IEnumerable<int> jobIds, CancellationToken ct)
+        {
+            var result = new List<JobProgressViewModel>();
+            foreach (int jobId in jobIds.Distinct().OrderBy(id => id))
+            {
+                JobOrder? job = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == jobId, ct);
+                VesselSchedule? schedule = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == jobId, ct);
+                result.Add(await LoadAsync(unitOfWork, job, schedule, ct));
+            }
+            return result;
+        }
+
         public static async Task<string?> GetBlockerAsync(IUnitOfWork unitOfWork, int? jobOrderId, int requiredStage, CancellationToken ct)
         {
             if (!jobOrderId.HasValue)
@@ -56,7 +78,7 @@ namespace IBS.Services.MSAP
 
         public static JobProgressViewModel Calculate(JobOrder? job, VesselSchedule? schedule, IEnumerable<DispatchTicket> tickets, IEnumerable<Billing> billings)
         {
-            var result = new JobProgressViewModel { HasSchedule = schedule != null, JobOrderId = job?.JobOrderId };
+            var result = new JobProgressViewModel { HasSchedule = schedule != null, JobOrderId = job?.JobOrderId, JobOrderNumber = job?.JobOrderNumber };
             List<DispatchTicket> active = tickets.Where(t => t.Status != MsapConstants.DispatchTicketStatus.Deleted).OrderBy(t => t.DispatchTicketId).ToList();
             List<Billing> bills = billings.OrderBy(b => b.MsapBillingId).ToList();
             if (schedule?.Status == MsapConstants.VesselScheduleStatus.Cancelled || job?.Status == MsapConstants.JobOrderStatus.Cancelled)

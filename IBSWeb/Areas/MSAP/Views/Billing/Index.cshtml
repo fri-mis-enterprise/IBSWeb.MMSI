@@ -3,6 +3,7 @@
 
     ViewData["Title"] = "Billing Statements";
     ViewData["IsFullWidth"] = true;
+    var jobProgress = ViewBag.JobProgressItems as IEnumerable<JobProgressViewModel>;
 }
 
 <div class="modern-layout">
@@ -18,15 +19,24 @@
                 <h1 class="modern-headline-lg">@ViewData["Title"]</h1>
             </div>
             <div class="flex gap-2">
-                @if (ViewBag.CanPost == true)
+                @if (ViewBag.JobOrderId != null)
                 {
-                    <a asp-action="Create" class="modern-btn-primary" data-hotkey="c">
+                    <a asp-action="Index" asp-route-jobOrderId="" asp-route-id="" class="modern-btn-secondary">All Billings</a>
+                }
+                @if (ViewBag.CanPost == true && (jobProgress == null || jobProgress.Any(p => p.Stage == JobProgressCalculator.BillingStage && !p.Stopped)))
+                {
+                    <a asp-action="Create" asp-route-jobOrderId="@ViewBag.JobOrderId" class="modern-btn-primary" data-hotkey="c">
                         <span class="material-symbols-outlined">add_circle</span>
                         CREATE BILLING
                     </a>
                 }
             </div>
         </div>
+
+        @if (ViewBag.JobProgressItems is IEnumerable<JobProgressViewModel> progress)
+        {
+            <partial name="_JobProgressList" model="progress" />
+        }
 
         <!-- Filter Group -->
         <div class="flex flex-wrap gap-2">
@@ -96,7 +106,7 @@
             let table = $('#paginatedTable').DataTable(ModernTable.config({
                 order: [[0, 'desc']],
                 columnDefs: [{ orderable: false, targets: [8] }],
-                ajax: ModernTable.ajax("@Url.Action("GetBillingList", "Billing", new { area = "MSAP" })"),
+                ajax: ModernTable.ajax("@Url.Action("GetBillingList", "Billing", new { area = "MSAP", jobOrderId = ViewBag.JobOrderId })"),
                 columns: [
                     { data: "date", defaultContent: "" },
                     {

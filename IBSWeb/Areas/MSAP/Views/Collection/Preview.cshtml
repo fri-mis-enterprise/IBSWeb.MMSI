@@ -29,6 +29,11 @@
             </div>
         </div>
 
+        @if (ViewBag.JobProgressItems is IEnumerable<JobProgressViewModel> progress)
+        {
+            <partial name="_JobProgressList" model="progress" />
+        }
+
         <div class="modern-grid">
             <!-- Left Column: Payer & Paid Items (col-8) -->
             <div class="modern-col-8 flex flex-column" style="gap: 1.5rem;">

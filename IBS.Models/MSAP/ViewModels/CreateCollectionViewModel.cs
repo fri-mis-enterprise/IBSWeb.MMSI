@@ -6,6 +6,8 @@ namespace IBS.Models.MSAP.ViewModels
 {
     public class CreateCollectionViewModel
     {
+        public int? JobOrderId { get; set; }
+
         public int? MsapCollectionId { get; set; }
 
         public string? MsapCollectionNumber { get; set; }

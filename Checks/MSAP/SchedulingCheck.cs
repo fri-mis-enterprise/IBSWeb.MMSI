@@ -165,6 +165,37 @@ namespace Checks.MSAP
                 db.Add(progressBill);
                 ticket.Billing = progressBill;
                 await db.SaveChangesAsync();
+                var bafOnlyBill = new Billing
+                {
+                    MsapBillingNumber = "CHECK-BAF", Date = order.Date, Status = MsapConstants.BillingStatus.ForPosting,
+                    BilledTo = "LOCAL", CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId,
+                    TerminalId = terminal.TerminalId, CreatedBy = "check", JobOrderId = order.JobOrderId, Amount = 25, Balance = 25
+                };
+                var unrelatedBill = new Billing
+                {
+                    MsapBillingNumber = "CHECK-O", Date = order.Date, Status = MsapConstants.BillingStatus.ForPosting,
+                    BilledTo = "LOCAL", CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId,
+                    TerminalId = terminal.TerminalId, CreatedBy = "check", Amount = 50, Balance = 50
+                };
+                db.AddRange(bafOnlyBill, unrelatedBill);
+                await db.SaveChangesAsync();
+                var paging = new DataTablesParameters
+                {
+                    Start = 0, Length = 10, Search = new DataTablesSearch { Value = "" },
+                    Columns = [new DataTablesColumn { Data = "status", Search = new DataTablesSearch { Value = "For Posting" } }]
+                };
+                var scoped = await progressBilling.GetPagedBillingsAsync(paging, default, order.JobOrderId);
+                Check(scoped.RecordsFiltered == 2 && scoped.TotalRecords == 2 && scoped.Data.All(b => b.MsapBillingId != unrelatedBill.MsapBillingId), "Scoped posting must include ticket-linked and BAF-only bills and exclude unrelated bills.");
+                var financialProgress = await JobProgressCalculator.LoadForBillingsAsync(work, [progressBill.MsapBillingId, bafOnlyBill.MsapBillingId], default);
+                Check(financialProgress.Count == 1 && financialProgress[0].JobOrderId == order.JobOrderId && financialProgress[0].Billings.Count == 0, "Financial progress must deduplicate linked jobs and show the earliest unfinished stage.");
+                bafOnlyBill.Status = unrelatedBill.Status = MsapConstants.BillingStatus.ForCollection;
+                await db.SaveChangesAsync();
+                var collectibles = await progressCollection.GetUncollectedBillingsForTableAsync(customer.CustomerId, null, default, order.JobOrderId);
+                string collectibleJson = JsonSerializer.Serialize(collectibles.Data);
+                Check(collectibleJson.Contains("CHECK-BAF", StringComparison.Ordinal) && !collectibleJson.Contains("CHECK-O", StringComparison.Ordinal), "Guided collection must include the split BAF bill and exclude other jobs.");
+                db.RemoveRange(bafOnlyBill, unrelatedBill);
+                await db.SaveChangesAsync();
+                Console.WriteLine("PASS: financial navigation deduplicates jobs, filters ticket-linked/split billings, matches Posting status and scopes collection.");
                 Check(!(await progressBilling.PostBillingAsync(progressBill.MsapBillingId, "check", default)).IsSuccess, "Posting ignored an unbilled ticket when Billing.JobOrderId was absent.");
                 progressBill.Status = MsapConstants.BillingStatus.ForCollection;
                 ticket.Status = MsapConstants.DispatchTicketStatus.Billed;

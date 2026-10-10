@@ -598,9 +598,9 @@ namespace IBS.Services.MSAP
             }
         }
 
-        public async Task<(IEnumerable<Billing> Data, int RecordsFiltered, int TotalRecords)> GetPagedBillingsAsync(DataTablesParameters parameters, CancellationToken cancellationToken)
+        public async Task<(IEnumerable<Billing> Data, int RecordsFiltered, int TotalRecords)> GetPagedBillingsAsync(DataTablesParameters parameters, CancellationToken cancellationToken, int? jobOrderId = null)
         {
-            return await unitOfWork.Billing.GetPagedBillingsAsync(parameters, cancellationToken);
+            return await unitOfWork.Billing.GetPagedBillingsAsync(parameters, cancellationToken, jobOrderId);
         }
 
         public async Task<List<object>> SearchPrincipalsAsync(string? term, int customerId, CancellationToken cancellationToken)

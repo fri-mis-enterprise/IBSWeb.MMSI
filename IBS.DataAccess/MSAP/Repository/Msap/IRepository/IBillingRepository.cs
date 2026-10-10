@@ -24,7 +24,7 @@ namespace IBS.DataAccess.MSAP.Repository.Msap.IRepository
 
         Billing ProcessAddress(Billing model, CancellationToken cancellationToken = default);
 
-        Task<(IEnumerable<Billing> Data, int RecordsFiltered, int TotalRecords)> GetPagedBillingsAsync(DataTablesParameters parameters, CancellationToken cancellationToken);
+        Task<(IEnumerable<Billing> Data, int RecordsFiltered, int TotalRecords)> GetPagedBillingsAsync(DataTablesParameters parameters, CancellationToken cancellationToken, int? jobOrderId = null);
 
         Task<List<Billing>> GetBillingsByCollectionIdAsync(int collectionId, CancellationToken cancellationToken);
     }

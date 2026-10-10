@@ -52,6 +52,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
                     return NotFound();
                 }
                 model.CustomerId = job.CustomerId;
+                model.JobOrderId = job.JobOrderId;
             }
             return View(model);
         }
@@ -69,7 +70,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
             if (result.IsSuccess)
             {
                 TempData["success"] = result.Message;
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Preview), new { id = result.Data });
             }
 
             TempData["error"] = result.Message;
@@ -111,7 +112,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
             if (result.IsSuccess)
             {
                 TempData["success"] = result.Message;
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Preview), new { id = viewModel.MsapCollectionId });
             }
 
             if (result.Status == ServiceResultStatus.NotFound)
@@ -140,6 +141,8 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
             if (collection != null)
             {
+                var bills = await unitOfWork.Billing.GetBillingsByCollectionIdAsync(id, cancellationToken);
+                ViewBag.JobProgressItems = await JobProgressCalculator.LoadForBillingsAsync(unitOfWork, bills.Select(b => b.MsapBillingId), cancellationToken);
                 return View(collection);
             }
 
@@ -228,9 +231,9 @@ namespace IBSWeb.Areas.MSAP.Controllers
         /// </summary>
         [HttpGet]
         [RequireAnyAccess(ProcedureEnum.CreateCollection)]
-        public async Task<IActionResult> GetUncollectedBillingsForTable(int customerId, int? collectionId, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> GetUncollectedBillingsForTable(int customerId, int? collectionId, CancellationToken cancellationToken = default, int? jobOrderId = null)
         {
-            var result = await collectionService.GetUncollectedBillingsForTableAsync(customerId, collectionId, cancellationToken);
+            var result = await collectionService.GetUncollectedBillingsForTableAsync(customerId, collectionId, cancellationToken, jobOrderId);
             return Json(new { success = result.IsSuccess, data = result.Data, message = result.Message });
         }
 

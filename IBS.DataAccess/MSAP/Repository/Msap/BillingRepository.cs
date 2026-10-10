@@ -1,10 +1,10 @@
+using System.Linq.Dynamic.Core;
+using System.Linq.Expressions;
 using IBS.DataAccess.MSAP.Data;
 using IBS.DataAccess.MSAP.Repository.Msap.IRepository;
 using IBS.Models.MSAP;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
-using System.Linq.Dynamic.Core;
 
 namespace IBS.DataAccess.MSAP.Repository.Msap
 {
@@ -239,12 +239,19 @@ namespace IBS.DataAccess.MSAP.Repository.Msap
             return model;
         }
 
-        public async Task<(IEnumerable<Billing> Data, int RecordsFiltered, int TotalRecords)> GetPagedBillingsAsync(DataTablesParameters parameters, CancellationToken cancellationToken)
+        public async Task<(IEnumerable<Billing> Data, int RecordsFiltered, int TotalRecords)> GetPagedBillingsAsync(DataTablesParameters parameters, CancellationToken cancellationToken, int? jobOrderId = null)
         {
             IQueryable<Billing> query = dbSet
                 .Include(b => b.Customer)
                 .Include(b => b.Terminal).ThenInclude(b => b.Port)
                 .Include(b => b.Vessel);
+
+            if (jobOrderId.HasValue)
+            {
+                query = query.Where(b => b.JobOrderId == jobOrderId.Value || _db.Set<DispatchTicket>()
+                    .Any(t => t.JobOrderId == jobOrderId.Value && t.BillingId == b.MsapBillingId));
+            }
+            int totalRecords = await query.CountAsync(cancellationToken);
 
             if (!string.IsNullOrEmpty(parameters.Search.Value))
             {
@@ -272,7 +279,7 @@ namespace IBS.DataAccess.MSAP.Repository.Msap
                     {
                         if (column.Data == "status")
                         {
-                            query = query.Where(b => b.Status.ToLower() == searchValue);
+                            query = query.Where(b => b.Status.ToLower() == searchValue.ToLower());
                         }
                         else if (column.Data == "date" || column.Data == "Date")
                         {
@@ -285,7 +292,6 @@ namespace IBS.DataAccess.MSAP.Repository.Msap
                 }
             }
 
-            var totalRecords = await dbSet.CountAsync(cancellationToken);
             var recordsFiltered = await query.CountAsync(cancellationToken);
 
             if (parameters.Order?.Count > 0 && parameters.Columns != null)

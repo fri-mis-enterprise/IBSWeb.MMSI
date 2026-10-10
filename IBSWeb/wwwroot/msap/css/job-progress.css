@@ -90,6 +90,17 @@
     cursor: not-allowed;
 }
 
+.financial-job-progress {
+    display: grid;
+    gap: .4rem;
+}
+
+@media print {
+    .financial-job-progress {
+        display: none !important;
+    }
+}
+
 @media (max-width: 700px) {
     .job-progress-next {
         align-items: flex-start;
