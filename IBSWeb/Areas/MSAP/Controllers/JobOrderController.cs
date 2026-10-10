@@ -133,6 +133,12 @@ namespace IBSWeb.Areas.MSAP.Controllers
         /// </summary>
         [RequireAnyAccess(
             "Access denied. You don't have permission to view Job Orders.",
+            ProcedureEnum.CreateDispatchTicket,
+            ProcedureEnum.EditDispatchTicket,
+            ProcedureEnum.SetTariff,
+            ProcedureEnum.ApproveTariff,
+            ProcedureEnum.CreateBilling,
+            ProcedureEnum.CreateCollection,
             ProcedureEnum.CreateJobOrder,
             ProcedureEnum.EditJobOrder,
             ProcedureEnum.DeleteJobOrder,
@@ -147,6 +153,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
             var billing = await unitOfWork.Billing.GetAsync(b => b.JobOrderId == id, cancellationToken);
             ViewData["HasBilling"] = billing != null;
+            ViewBag.HasDispatchTickets = await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == id, cancellationToken) != null;
             ViewData["BillingNumber"] = billing?.MsapBillingNumber;
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -156,7 +163,9 @@ namespace IBSWeb.Areas.MSAP.Controllers
             ViewBag.CanDeleteTicket = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.DeleteDispatchTicket);
             ViewBag.CanEditJobOrder = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.EditJobOrder);
             ViewBag.CanCreateDispatchTicket = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.CreateDispatchTicket);
-            ViewBag.VesselSchedule = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == id, cancellationToken);
+            var schedule = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == id, cancellationToken);
+            ViewBag.VesselSchedule = schedule;
+            ViewBag.JobProgress = await JobProgressCalculator.LoadAsync(unitOfWork, jobOrder, schedule, cancellationToken);
 
             foreach (var ticket in jobOrder.DispatchTickets)
             {
@@ -214,9 +223,10 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
             ViewData["JobOrderNumber"] = jobOrder.JobOrderNumber;
 
-            if (jobOrder.Status != MsapConstants.JobOrderStatus.Open)
+            string? editError = await jobOrderService.GetEditErrorAsync(jobOrder, cancellationToken);
+            if (editError != null)
             {
-                TempData["error"] = $"Job Order #{jobOrder.JobOrderNumber} is {jobOrder.Status.ToLowerInvariant()} and cannot be edited.";
+                TempData["error"] = editError;
                 return RedirectToAction(nameof(Details), new { id });
             }
 

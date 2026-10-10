@@ -91,6 +91,8 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
                 if (viewModel.JobOrderId.HasValue)
                 {
+                    TempData["PromptAddTicket"] = true;
+                    TempData.Remove("success");
                     return RedirectToAction("Details", "JobOrder", new { id = viewModel.JobOrderId });
                 }
 
@@ -111,6 +113,10 @@ namespace IBSWeb.Areas.MSAP.Controllers
         /// </summary>
         [RequireAnyAccess(
             "Access denied. You don't have permission to view Dispatch Tickets.",
+            ProcedureEnum.SetTariff,
+            ProcedureEnum.ApproveTariff,
+            ProcedureEnum.CreateBilling,
+            ProcedureEnum.CreateCollection,
             ProcedureEnum.CreateDispatchTicket,
             ProcedureEnum.EditDispatchTicket,
             ProcedureEnum.DeleteDispatchTicket)]
@@ -279,9 +285,9 @@ namespace IBSWeb.Areas.MSAP.Controllers
                 return NotFound();
             }
 
-            if (ticket.Status != MsapConstants.DispatchTicketStatus.ForApproval)
+            if (ticket.Status is not (MsapConstants.DispatchTicketStatus.ForApproval or MsapConstants.DispatchTicketStatus.Disapproved))
             {
-                TempData["error"] = "Only tickets in 'For Approval' status can have their tariff edited.";
+                TempData["error"] = "Only tickets awaiting approval or disapproved can have their tariff edited.";
                 return RedirectToAction(nameof(Index), new { filterType });
             }
 

@@ -56,9 +56,20 @@ namespace IBSWeb.Areas.MSAP.Controllers
         /// </summary>
         [HttpGet]
         [RequireAccess(ProcedureEnum.CreateBilling, "Access denied. You don't have permission to create Billings.")]
-        public async Task<IActionResult> Create(CancellationToken cancellationToken)
+        public async Task<IActionResult> Create(CancellationToken cancellationToken, int? jobOrderId = null)
         {
-            var model = await billingService.PopulateBillingSelectListsAsync(new Billing(), cancellationToken);
+            var model = new Billing();
+            if (jobOrderId.HasValue)
+            {
+                var job = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == jobOrderId.Value, cancellationToken);
+                if (job == null)
+                {
+                    return NotFound();
+                }
+                model.CustomerId = job.CustomerId;
+                model.JobOrderId = job.JobOrderId;
+            }
+            model = await billingService.PopulateBillingSelectListsAsync(model, cancellationToken);
             return View(model);
         }
 

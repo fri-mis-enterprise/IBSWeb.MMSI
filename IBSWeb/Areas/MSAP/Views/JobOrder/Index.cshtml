@@ -63,8 +63,6 @@
     <script>
         $(document).ready(function () {
             const detailsUrl = '@Url.Action("Details", "JobOrder", new { area = "MSAP" })';
-            const editUrl = '@Url.Action("Edit", "JobOrder", new { area = "MSAP" })';
-            const canEdit = @((ViewBag.CanEdit as bool? ?? false).ToString().ToLower());
 
             const urlParams = new URLSearchParams(window.location.search);
             const searchTerm = urlParams.get('q') || '';
@@ -115,8 +113,7 @@
                         orderable: false,
                         className: "text-center",
                         render: (data, type, row) => ModernTable.render.dropdown([
-                            { label: 'View Details', icon: 'visibility', url: `${detailsUrl}?id=${row.jobOrderId}` },
-                            { label: 'Edit Order', icon: 'edit', url: `${editUrl}?id=${row.jobOrderId}`, condition: !row.isMonthClosed && canEdit }
+                            { label: 'View Details', icon: 'visibility', url: `${detailsUrl}?id=${row.jobOrderId}` }
                         ])
                     }
                 ]

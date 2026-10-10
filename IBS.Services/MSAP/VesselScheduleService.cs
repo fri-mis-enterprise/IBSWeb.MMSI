@@ -61,7 +61,7 @@ namespace IBS.Services.MSAP
                         result = ServiceResult.Failure("Cannot edit a completed or cancelled schedule.", ServiceResultStatus.ValidationError);
                         return;
                     }
-                    model.Status = existing.Status;
+                    model.Status = existing.JobOrderId.HasValue ? MsapConstants.VesselScheduleStatus.Tentative : existing.Status;
                     var error = await ValidateAsync(model, allowConflicts, ct);
                     if (error != null)
                     {
@@ -70,34 +70,34 @@ namespace IBS.Services.MSAP
                     }
                     if (existing.JobOrderId.HasValue)
                     {
-                        var job = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == existing.JobOrderId.Value, ct);
+                        var job = await unitOfWork.JobOrder.GetForUpdateAsync(existing.JobOrderId.Value, ct);
                         if (job == null)
                         {
                             result = ServiceResult.Failure("Linked Job Order not found.", ServiceResultStatus.NotFound);
                             return;
                         }
-                        if (await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == job.JobOrderId &&
-                            (t.BillingId != null || t.Status == MsapConstants.DispatchTicketStatus.Billed), ct) != null)
+                        if (job.Status != MsapConstants.JobOrderStatus.Open
+                            || await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == job.JobOrderId, ct) != null
+                            || await unitOfWork.Billing.GetAsync(b => b.JobOrderId == job.JobOrderId, ct) != null)
                         {
-                            result = ServiceResult.Failure("This booking has billed or reserved tickets. Resolve the billing before revising the schedule.", ServiceResultStatus.ValidationError);
+                            result = ServiceResult.Failure("This booking already has service records or billing, or its Job Order is no longer open. Schedule revision is only available before Dispatch Tickets or billing exist.", ServiceResultStatus.ValidationError);
                             return;
                         }
+                        var oldPeriodClosed = await unitOfWork.PostedPeriod.IsMonthClosedAsync(job.Date.Year, job.Date.Month, ct);
                         var date = DateOnly.FromDateTime(model.PlannedStart);
-                        if (await unitOfWork.PostedPeriod.IsMonthClosedAsync(date.Year, date.Month, ct))
+                        if (oldPeriodClosed || await unitOfWork.PostedPeriod.IsMonthClosedAsync(date.Year, date.Month, ct))
                         {
-                            result = ServiceResult.Failure($"Cannot move the booking into closed period {date:MMMM yyyy}.", ServiceResultStatus.ValidationError);
+                            result = ServiceResult.Failure("Cannot revise a booking in a closed period.", ServiceResultStatus.ValidationError);
                             return;
                         }
-                        var revision = BuildJobOrder(model);
-                        revision.JobOrderId = job.JobOrderId;
-                        revision.COSNumber = job.COSNumber;
-                        revision.Remarks = job.Remarks;
-                        var updated = await jobOrderService.UpdateJobOrderAsync(revision, username, ct);
-                        if (!updated.IsSuccess)
-                        {
-                            result = updated;
-                            throw new InvalidOperationException(updated.Message);
-                        }
+                        job.Status = MsapConstants.JobOrderStatus.Invalidated;
+                        job.EditedBy = username;
+                        job.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+                        await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username,
+                            $"Invalidated Job Order #{job.JobOrderNumber} after revision of vessel schedule #{existing.VesselScheduleId}; retained for reference.", "Job Order", job.JobOrderId, job.JobOrderNumber), ct);
+                        existing.JobOrderId = null;
+                        existing.JobOrder = null;
+                        existing.Status = MsapConstants.VesselScheduleStatus.Tentative;
                     }
                     existing.CustomerId = model.CustomerId;
                     existing.VesselId = model.VesselId;
@@ -113,9 +113,7 @@ namespace IBS.Services.MSAP
                     existing.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
                     await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Updated vessel schedule #{model.VesselScheduleId}. Overlap override: {allowConflicts}", "Vessel Schedule", model.VesselScheduleId), ct);
                     await unitOfWork.SaveAsync(ct);
-                    result = ServiceResult.Success(existing.JobOrderId.HasValue
-                        ? "Schedule and linked Job Order updated successfully."
-                        : "Schedule updated successfully.");
+                    result = ServiceResult.Success("Schedule updated. Review and confirm the booking before creating its Job Order.");
                 }, ct);
 
                 return result;
@@ -213,12 +211,6 @@ namespace IBS.Services.MSAP
                     }
                     if (schedule.JobOrderId.HasValue)
                     {
-                        if (status == MsapConstants.VesselScheduleStatus.Cancelled &&
-                            await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == schedule.JobOrderId.Value, ct) != null)
-                        {
-                            result = ServiceResult.Failure("Dispatch Tickets already exist. Manage cancellation through the linked Job Order.", ServiceResultStatus.ValidationError);
-                            return;
-                        }
                         result = status == MsapConstants.VesselScheduleStatus.Cancelled
                             ? await jobOrderService.CancelJobOrderAsync(schedule.JobOrderId.Value, username, ct)
                             : await jobOrderService.CompleteBookingAsync(schedule.JobOrderId.Value, username, ct);

@@ -99,68 +99,80 @@ namespace IBS.Services.MSAP
             }
         }
 
+        public async Task<string?> GetEditErrorAsync(JobOrder job, CancellationToken ct)
+        {
+            if (job.Status != MsapConstants.JobOrderStatus.Open)
+            {
+                return "Only an Open Job Order can be edited.";
+            }
+            if (await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == job.JobOrderId, ct) != null)
+            {
+                return "Edit the vessel schedule instead. Scheduled Job Orders cannot be revised directly.";
+            }
+            if (await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == job.JobOrderId, ct) != null)
+            {
+                return "This Job Order already has Dispatch Tickets and cannot be edited.";
+            }
+            if (await unitOfWork.Billing.GetAsync(b => b.JobOrderId == job.JobOrderId, ct) != null)
+            {
+                return "This Job Order already has billing and cannot be edited.";
+            }
+            var period = await GuardClosedPeriodAsync(job.Date, ct);
+            return period?.Message;
+        }
+
         public virtual async Task<ServiceResult> UpdateJobOrderAsync(JobOrder model, string username, CancellationToken cancellationToken)
         {
             try
             {
-                var jobOrder = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == model.JobOrderId, cancellationToken);
-                if (jobOrder == null)
+                var result = ServiceResult.Failure("Failed to update Job Order.");
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    return ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
-                }
+                    var jobOrder = await unitOfWork.JobOrder.GetForUpdateAsync(model.JobOrderId, cancellationToken);
+                    if (jobOrder == null)
+                    {
+                        result = ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
+                        return;
+                    }
+                    string? error = await GetEditErrorAsync(jobOrder, cancellationToken);
+                    if (error != null)
+                    {
+                        result = ServiceResult.Failure(error);
+                        return;
+                    }
+                    var timeError = ValidateTimeRange(model.PlannedStartTime, model.PlannedEndTime);
+                    if (timeError != null)
+                    {
+                        result = ServiceResult.Failure(timeError);
+                        return;
+                    }
 
-                var guard = await GuardClosedPeriodAsync(jobOrder.Date, cancellationToken);
-                if (guard != null)
-                {
-                    return guard;
-                }
+                    var old = (jobOrder.CustomerId, jobOrder.VesselId, jobOrder.PortId, jobOrder.TerminalId);
 
-                if (jobOrder.Status != MsapConstants.JobOrderStatus.Open)
-                {
-                    return ServiceResult.Failure($"Job Order #{jobOrder.JobOrderNumber} is {jobOrder.Status.ToLower()} and cannot be edited.");
-                }
+                    jobOrder.Date = model.Date;
+                    jobOrder.CustomerId = model.CustomerId;
+                    jobOrder.VesselId = model.VesselId;
+                    jobOrder.PortId = model.PortId;
+                    jobOrder.TerminalId = model.TerminalId;
+                    jobOrder.COSNumber = model.COSNumber;
+                    jobOrder.VoyageNumber = model.VoyageNumber;
+                    jobOrder.PlannedStartTime = model.PlannedStartTime;
+                    jobOrder.PlannedEndTime = model.PlannedEndTime;
+                    jobOrder.PreferredTugboatId = model.PreferredTugboatId;
+                    jobOrder.RequiredTugCount = model.RequiredTugCount;
+                    jobOrder.Remarks = model.Remarks;
+                    jobOrder.EditedBy = username;
+                    jobOrder.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                if (await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == model.JobOrderId &&
-                    s.Status == MsapConstants.VesselScheduleStatus.Completed, cancellationToken) != null)
-                {
-                    return ServiceResult.Failure("The vessel booking is completed. Its planned details cannot be revised.");
-                }
+                    // Cascade updates to related records
+                    await SyncRelatedRecordsAsync(jobOrder, old, cancellationToken);
 
-                if (await unitOfWork.Billing.GetAsync(b => b.JobOrderId == model.JobOrderId && b.Status == MsapConstants.BillingStatus.ForPosting, cancellationToken) != null)
-                {
-                    return ServiceResult.Failure($"Job Order #{jobOrder.JobOrderNumber} has an unposted billing. Please delete the billing first before editing.");
-                }
+                    await RecordAuditAsync($"Edited Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
+                    await unitOfWork.SaveAsync(cancellationToken);
 
-                var timeError = ValidateTimeRange(model.PlannedStartTime, model.PlannedEndTime);
-                if (timeError != null)
-                {
-                    return ServiceResult.Failure(timeError);
-                }
-
-                var old = (jobOrder.CustomerId, jobOrder.VesselId, jobOrder.PortId, jobOrder.TerminalId);
-
-                jobOrder.Date = model.Date;
-                jobOrder.CustomerId = model.CustomerId;
-                jobOrder.VesselId = model.VesselId;
-                jobOrder.PortId = model.PortId;
-                jobOrder.TerminalId = model.TerminalId;
-                jobOrder.COSNumber = model.COSNumber;
-                jobOrder.VoyageNumber = model.VoyageNumber;
-                jobOrder.PlannedStartTime = model.PlannedStartTime;
-                jobOrder.PlannedEndTime = model.PlannedEndTime;
-                jobOrder.PreferredTugboatId = model.PreferredTugboatId;
-                jobOrder.RequiredTugCount = model.RequiredTugCount;
-                jobOrder.Remarks = model.Remarks;
-                jobOrder.EditedBy = username;
-                jobOrder.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
-
-                // Cascade updates to related records
-                await SyncRelatedRecordsAsync(jobOrder, old, cancellationToken);
-
-                await RecordAuditAsync($"Edited Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
-                await unitOfWork.SaveAsync(cancellationToken);
-
-                return ServiceResult.Success($"Job Order #{jobOrder.JobOrderNumber} updated successfully.");
+                    result = ServiceResult.Success($"Job Order #{jobOrder.JobOrderNumber} updated successfully.");
+                }, cancellationToken);
+                return result;
             }
             catch (Exception ex)
             {

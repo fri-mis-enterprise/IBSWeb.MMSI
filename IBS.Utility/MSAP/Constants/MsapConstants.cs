@@ -55,6 +55,7 @@ namespace IBS.Utility.MSAP.Constants
             public const string Open = "Open";
             public const string Closed = "Closed";
             public const string Cancelled = "Cancelled";
+            public const string Invalidated = "Invalidated";
         }
 
         public static class DispatchTicketStatus

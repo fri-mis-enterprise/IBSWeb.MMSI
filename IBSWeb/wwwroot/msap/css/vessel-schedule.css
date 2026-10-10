@@ -302,3 +302,52 @@
         min-height: 44px;
     }
 }
+
+.schedule-details-heading,
+.schedule-details-identity {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .6rem;
+}
+
+.schedule-details-heading {
+    justify-content: space-between;
+}
+
+.schedule-details-identity h1 {
+    margin: 0;
+}
+
+.schedule-booking-actions summary {
+    cursor: pointer;
+    font-size: .8rem;
+    color: var(--primary);
+}
+
+.schedule-confirm-review {
+    text-align: left;
+    font-size: .875rem;
+}
+
+.schedule-confirm-review dl {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 2fr;
+    gap: .4rem .75rem;
+}
+
+.schedule-confirm-review dt {
+    color: var(--on-surface-variant);
+}
+
+.schedule-confirm-review dd {
+    margin: 0;
+}
+
+.modern-swal-popup:has(.schedule-confirm-review) {
+    width: min(640px, calc(100vw - 2rem)) !important;
+}
+
+.modern-swal-popup div:has(> .schedule-confirm-review) {
+    max-width: none;
+}

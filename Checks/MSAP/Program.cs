@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using IBS.DataAccess.Data;
@@ -27,6 +28,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+Checks.MSAP.JobProgressCheck.Run();
+
 var webRoot = Path.GetFullPath("IBSWeb");
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
@@ -43,6 +46,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql
 builder.Services.AddDefaultIdentity<ApplicationUser>().AddRoles<IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>();
 builder.Services.AddScoped<IBS.DataAccess.Repository.IRepository.IUnitOfWork, IBS.DataAccess.Repository.UnitOfWork>();
 builder.Services.AddMsapModule(builder.Configuration);
+builder.Services.AddSingleton<IBS.Services.MSAP.AccessControl.IAccessControlService, Checks.MSAP.JobProgressCheck.CheckAccess>();
 await using var app = builder.Build();
 app.UseRouting();
 #pragma warning disable ASP0014 // Populate routing without starting a server.
@@ -129,6 +133,51 @@ foreach (var status in new[] { "Tentative", "Confirmed", "In Progress", "Complet
     }
 }
 Console.WriteLine("PASS: schedule progress renders all statuses, one current stage and a separate cancelled state.");
+var jobProgressView = engine.GetView(null, "/Areas/MSAP/Views/Shared/_JobProgress.cshtml", false);
+Check(jobProgressView.Success, "Shared Job Progress partial is missing.");
+foreach (bool allowed in new[] { false, true })
+{
+    for (int stage = 0; stage <= 9; stage++)
+    {
+        var http = new DefaultHttpContext { RequestServices = services };
+        http.SetEndpoint(new Endpoint(null, new EndpointMetadataCollection(), "Job Progress check"));
+        if (allowed)
+        {
+            http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "progress-allowed")], "check"));
+        }
+        var actionContext = new ActionContext(http, new RouteData(), moduleActions.First());
+        var model = new IBS.Models.MSAP.ViewModels.JobProgressViewModel
+        {
+            Stage = stage == 9 ? 0 : stage, HasSchedule = stage < 2, Guidance = "Attention check",
+            Stopped = stage == 9, IsCancelled = stage == 9,
+            Permission = stage == 8 ? null : IBS.Models.MSAP.Enums.ProcedureEnum.ApproveTariff,
+            WaitingFor = "tariff approval", ActionController = "DispatchTicket", ActionName = "Preview",
+            TargetId = 123, ActionLabel = "Review Charges"
+        };
+        var viewData = new ViewDataDictionary<IBS.Models.MSAP.ViewModels.JobProgressViewModel>(services.GetRequiredService<Microsoft.AspNetCore.Mvc.ModelBinding.IModelMetadataProvider>(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary()) { Model = model };
+        using var output = new StringWriter();
+        var viewContext = new ViewContext(actionContext, jobProgressView.View!, viewData,
+            services.GetRequiredService<ITempDataDictionaryFactory>().GetTempData(http), output, new HtmlHelperOptions());
+        await jobProgressView.View!.RenderAsync(viewContext);
+        string html = output.ToString();
+        Check(Regex.Matches(html, "aria-current=\"step\"").Count == (stage == 9 ? 0 : 1), "Job Progress current stage is wrong.");
+        Check(html.Contains("Fully Collected", StringComparison.Ordinal) && html.Contains("Job Progress", StringComparison.Ordinal), "Job Progress does not show the entire journey.");
+        Check(Regex.Matches(html, "class=\"modern-btn-primary\"").Count == (allowed && stage < 8 ? 1 : 0), "Job Progress must show exactly one permitted next action.");
+        if (!allowed && stage < 8)
+        {
+            Check(html.Contains("Waiting for an authorized user", StringComparison.Ordinal), "Job Progress is missing its role handoff.");
+        }
+        if (allowed && stage == JobProgressCalculator.TariffStage)
+        {
+            Check(html.Contains("disabled", StringComparison.Ordinal), "Tariff must use the ticket row action instead of a duplicate progress action.");
+        }
+        if (allowed && stage < 8 && stage != JobProgressCalculator.TariffStage)
+        {
+            Check(html.Contains("/MSAP/DispatchTicket/Preview/123", StringComparison.Ordinal), "Job Progress next action route is wrong.");
+        }
+    }
+}
+Console.WriteLine("PASS: shared Job Progress renders all nine stages, cancellation, role handoffs and exactly one permitted next action.");
 foreach (var area in new[] { "MSAP", "MSAPAdmin", "MSAPSuperAdmin" })
 {
     foreach (var view in Directory.EnumerateFiles(Path.Combine(webRoot, "Areas", area), "*.cshtml", SearchOption.AllDirectories))

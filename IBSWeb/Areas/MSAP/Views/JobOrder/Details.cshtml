@@ -25,58 +25,11 @@
                 </div>
             </div>
             <div class="flex gap-2" style="flex-wrap: wrap;">
-                @if (ViewBag.CanEditJobOrder == true && Model.Status == MsapConstants.JobOrderStatus.Open && !bookingClosed && !ViewBag.HasBilling)
-                {
-                    <a asp-action="Edit" asp-route-id="@Model.JobOrderId" class="modern-btn-secondary" data-hotkey="e">
-                        <span class="material-symbols-outlined">edit</span> Edit Details
-                    </a>
-                }
-
-                <a asp-action="Index" class="modern-btn-secondary">
-                    <span class="material-symbols-outlined">arrow_back</span> Back
-                </a>
+                <a asp-action="Index" class="modern-btn-secondary"><span class="material-symbols-outlined">arrow_back</span> Back</a>
             </div>
         </div>
 
-        @if (booking != null || (ViewBag.CanEditJobOrder == true && Model.Status == MsapConstants.JobOrderStatus.Open))
-        {
-            <section class="modern-card modern-card-body">
-                <div class="flex-stack">
-                    <div>
-                        <h2 class="modern-headline-md">Vessel booking @(booking != null ? $"· {booking.Status}" : "")</h2>
-                        <p class="modern-body-sm">Operational completion is separate from billing and collection.</p>
-                    </div>
-                    <div class="flex gap-2" style="flex-wrap: wrap;">
-                        @if (booking != null)
-                        {
-                            <a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@booking.VesselScheduleId" class="modern-btn-secondary">View Schedule</a>
-                        }
-                        @if (ViewBag.CanEditJobOrder == true && !bookingClosed && Model.Status != MsapConstants.JobOrderStatus.Cancelled)
-                        {
-                            @if (booking != null && Model.DispatchTickets.Any())
-                            {
-                                <form asp-action="CompleteBooking" method="post" data-booking-action="Complete vessel booking" data-confirm-text="Confirm that all vessel operations are finished and no more Dispatch Tickets are needed. Actual service times must be recorded. Billing and collection can continue.">
-                                    <input type="hidden" name="id" value="@Model.JobOrderId" />
-                                    <button type="submit" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span> Complete Vessel Booking</button>
-                                </form>
-                            }
-                            @if (Model.Status == MsapConstants.JobOrderStatus.Open && !Model.DispatchTickets.Any() && !ViewBag.HasBilling)
-                            {
-                                <form asp-action="Cancel" method="post" data-booking-action="Cancel booking" data-confirm-text="This cancels the Job Order and its linked schedule together. Existing records are retained; the cancelled order cannot accept new tickets.">
-                                    <input type="hidden" name="id" value="@Model.JobOrderId" />
-                                    <button type="submit" class="modern-btn-error"><span class="material-symbols-outlined" aria-hidden="true">event_busy</span> Cancel Booking</button>
-                                </form>
-                            }
-                        }
-                    </div>
-                </div>
-                @if (!bookingClosed && Model.DispatchTickets.Any())
-                {
-                    <p class="modern-body-sm">To cancel, resolve active Dispatch Tickets and billing first. Posted billing follows the reversal workflow.</p>
-                }
-            </section>
-        }
-
+        <partial name="_JobProgress" model="(JobProgressViewModel)ViewBag.JobProgress" />
         <!-- Main Grid Layout - Now explicitly using Grid classes for side-by-side -->
         <div class="modern-grid">
             <!-- Left Column: Job Order Details (col-4) -->
@@ -85,6 +38,12 @@
                     <div class="modern-card-header-info">
                         <span class="material-symbols-outlined">info</span>
                         <h2 class="modern-headline-md">Job Order Details</h2>
+                        @if (ViewBag.CanEditJobOrder == true && booking == null && Model.Status == MsapConstants.JobOrderStatus.Open && ViewBag.HasDispatchTickets != true && !ViewBag.HasBilling)
+                        {
+                            <a asp-action="Edit" asp-route-id="@Model.JobOrderId" class="modern-btn-secondary" title="Edit Job Order" aria-label="Edit Job Order" style="margin-left:auto;padding:.35rem;">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </a>
+                        }
                     </div>
                     <div class="modern-card-body">
                         <div class="modern-grid">
@@ -160,10 +119,7 @@
                         </div>
                         @if (ViewBag.CanCreateDispatchTicket == true && Model.Status == MsapConstants.JobOrderStatus.Open && !bookingClosed && !ViewBag.HasBilling && Model.DispatchTickets.All(t => t.Status != MsapConstants.DispatchTicketStatus.Billed))
                         {
-                            <a asp-action="Create" asp-controller="DispatchTicket" asp-route-jobOrderId="@Model.JobOrderId" class="modern-btn-primary text-sm" data-hotkey="a">
-                                <span class="material-symbols-outlined" style="font-size:18px">add_circle</span>
-                                ADD TICKET
-                            </a>
+                            <a asp-controller="DispatchTicket" asp-action="Create" asp-route-jobOrderId="@Model.JobOrderId" class="modern-btn-primary text-sm"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span> Add Ticket</a>
                         }
                     </div>
 
@@ -181,13 +137,13 @@
                             <div class="flex items-center justify-between">
                                 <span id="batchCount" class="modern-label font-bold">0 selected</span>
                                 <div class="flex gap-2">
-                                    @if (ViewBag.CanApproveTariff == true)
+                                    @if (ViewBag.CanApproveTariff == true && ((JobProgressViewModel)ViewBag.JobProgress).Stage == JobProgressCalculator.ApprovalStage)
                                     {
                                         <button type="button" id="batchApproveBtn" class="modern-btn-primary text-sm" style="display:none; padding:0.4rem 0.75rem;" onclick="batchApprove()">
                                             <span class="material-symbols-outlined" style="font-size:16px">check_circle</span> Approve Selected
                                         </button>
                                     }
-                                    @if (ViewBag.CanSetTariff == true)
+                                    @if (ViewBag.CanSetTariff == true && ((JobProgressViewModel)ViewBag.JobProgress).Stage == JobProgressCalculator.TariffStage)
                                     {
                                         <button type="button" id="batchSetTariffBtn" class="modern-btn-secondary text-sm" style="display:none; padding:0.4rem 0.75rem;" onclick="showBatchTariffModal()">
                                             <span class="material-symbols-outlined" style="font-size:16px">payments</span> Set Tariff
@@ -288,7 +244,7 @@
                                                     }
                                                     else if (!ViewBag.HasBilling && ticket.Status is "For Tariff")
                                                     {
-                                                        @if (ViewBag.CanSetTariff == true)
+                                                        @if (ViewBag.CanSetTariff == true && ((JobProgressViewModel)ViewBag.JobProgress).Stage == JobProgressCalculator.TariffStage)
                                                         {
                                                             <a asp-action="SetTariff" asp-controller="DispatchTicket" asp-route-id="@ticket.DispatchTicketId" class="modern-dropdown-item" style="color: var(--primary)">
                                                                 <span class="material-symbols-outlined">payments</span> Set Tariff
@@ -309,13 +265,13 @@
                                                     }
                                                     else if (!ViewBag.HasBilling && ticket.Status == "For Approval")
                                                     {
-                                                        @if (ViewBag.CanApproveTariff == true)
+                                                        @if (ViewBag.CanApproveTariff == true && ((JobProgressViewModel)ViewBag.JobProgress).Stage == JobProgressCalculator.ApprovalStage)
                                                         {
                                                             <button type="button" class="modern-dropdown-item" style="color: #406915; width: 100%; border: none; background: none; cursor: pointer;" data-id="@ticket.DispatchTicketId" onclick="confirmApprove(this)">
                                                                 <span class="material-symbols-outlined">check_circle</span> Approve Tariff
                                                             </button>
                                                         }
-                                                        @if (ViewBag.CanApproveTariff == true)
+                                                        @if (ViewBag.CanApproveTariff == true && ((JobProgressViewModel)ViewBag.JobProgress).Stage == JobProgressCalculator.ApprovalStage)
                                                         {
                                                             <button type="button" class="modern-dropdown-item" style="color: var(--error); width: 100%; border: none; background: none; cursor: pointer;" onclick="confirmDisapprove(@ticket.DispatchTicketId)">
                                                                 <span class="material-symbols-outlined">block</span> Disapprove Tariff
@@ -478,21 +434,6 @@
 
 @section Scripts {
     <script>
-        document.querySelectorAll('[data-booking-action]').forEach(form => {
-            let reviewing = false;
-            form.addEventListener('submit', async event => {
-                event.preventDefault();
-                if (reviewing) return;
-                reviewing = true;
-                const result = await ModernAlert.confirm({ title: form.dataset.bookingAction + '?', text: form.dataset.confirmText, icon: 'warning', confirmText: form.dataset.bookingAction });
-                if (result.isConfirmed) {
-                    ModernAlert.showLoading('Updating booking…');
-                    form.submit();
-                } else {
-                    reviewing = false;
-                }
-            });
-        });
         const PageConfig = {
             jobOrderId: @Model.JobOrderId,
             jobOrderNumber: '@Model.JobOrderNumber',
@@ -506,6 +447,13 @@
         };
 
         $(document).ready(function () {
+            @if (TempData["PromptAddTicket"] is true && ViewBag.CanCreateDispatchTicket == true && Model.Status == MsapConstants.JobOrderStatus.Open && !bookingClosed && !ViewBag.HasBilling && Model.DispatchTickets.All(t => t.Status != MsapConstants.DispatchTicketStatus.Billed))
+            {
+                <text>
+                ModernAlert.confirm({ title: 'Dispatch Ticket saved', text: 'Do you need to add more tickets?', icon: 'question', confirmText: 'Add another ticket', cancelText: 'Continue with existing tickets' })
+                    .then(result => { if (result.isConfirmed) window.location.href = '@Url.Action("Create", "DispatchTicket", new { area = "MSAP", jobOrderId = Model.JobOrderId })'; });
+                </text>
+            }
             $(document).on('click', '.dropdown-trigger', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();

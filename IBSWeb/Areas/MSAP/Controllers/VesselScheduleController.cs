@@ -164,8 +164,17 @@ namespace IBSWeb.Areas.MSAP.Controllers
                 return NotFound();
             }
             await SetActionPermissionsAsync();
+            var job = schedule.JobOrderId.HasValue
+                ? await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == schedule.JobOrderId.Value, ct)
+                : null;
+            ViewBag.JobProgress = await JobProgressCalculator.LoadAsync(unitOfWork, job, schedule, ct);
             ViewBag.HasDispatchTickets = schedule.JobOrderId.HasValue &&
                 await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == schedule.JobOrderId.Value, ct) != null;
+            bool hasBilling = schedule.JobOrderId.HasValue && await unitOfWork.Billing.GetAsync(b => b.JobOrderId == schedule.JobOrderId, ct) != null;
+            bool hasActiveTickets = schedule.JobOrderId.HasValue && await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == schedule.JobOrderId
+                && (t.Status != MsapConstants.DispatchTicketStatus.Deleted || t.BillingId != null), ct) != null;
+            ViewBag.CanRevise = schedule.JobOrderId == null || (job?.Status == MsapConstants.JobOrderStatus.Open && ViewBag.HasDispatchTickets != true && !hasBilling);
+            ViewBag.CanCancel = schedule.JobOrderId == null || (job?.Status == MsapConstants.JobOrderStatus.Open && !hasActiveTickets && !hasBilling);
             return View(schedule);
         }
 
@@ -189,8 +198,11 @@ namespace IBSWeb.Areas.MSAP.Controllers
             {
                 return RedirectToAction(nameof(Details), new { id });
             }
-            await SetActionPermissionsAsync();
-            return View(schedule);
+            if (Request.Headers["X-Requested-With"] != "XMLHttpRequest")
+            {
+                return RedirectToAction(nameof(Details), new { id, review = true });
+            }
+            return PartialView("_ConfirmSchedule", schedule);
         }
 
         [HttpPost]
@@ -198,23 +210,18 @@ namespace IBSWeb.Areas.MSAP.Controllers
         [RequireAccess(ProcedureEnum.CreateJobOrder)]
         public async Task<IActionResult> Confirm(int id, DateTime reviewedAt, bool allowConflicts, CancellationToken ct)
         {
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                var result = await scheduleService.ConfirmAsync(id, reviewedAt, User.Identity?.Name ?? "system", ct, allowConflicts);
-                if (result.IsSuccess)
-                {
-                    TempData["success"] = result.Message;
-                    return RedirectToAction("Details", "JobOrder", new { id = result.Data });
-                }
-                ModelState.AddModelError("", result.Message ?? "Failed to confirm schedule.");
+                return Json(new { success = false, message = "Review the schedule again before confirming." });
             }
-            var schedule = await LoadDetailsAsync(id, ct);
-            if (schedule == null)
+            var result = await scheduleService.ConfirmAsync(id, reviewedAt, User.Identity?.Name ?? "system", ct, allowConflicts);
+            return Json(new
             {
-                return NotFound();
-            }
-            await SetActionPermissionsAsync();
-            return View(schedule);
+                success = result.IsSuccess,
+                message = result.Message,
+                requiresConflictAcknowledgement = !allowConflicts && result.Message?.StartsWith("Overlapping plans:", StringComparison.Ordinal) == true,
+                redirectUrl = result.IsSuccess ? Url.Action("Details", "JobOrder", new { area = "MSAP", id = result.Data }) : null
+            });
         }
 
         [HttpPost]

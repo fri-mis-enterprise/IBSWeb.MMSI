@@ -359,6 +359,7 @@
     <script>
         $(document).ready(function () {
             let currentCustomerId = null;
+            let initialJobOrderId = @System.Text.Json.JsonSerializer.Serialize(Model.JobOrderId);
             let currentCustomer = null;
             let currentPrincipal = null;
             let currentTerminalName = null; //  track for PHIL-CEB split detection
@@ -624,6 +625,10 @@
                     if (Array.isArray(data)) {
                         data.forEach(jo => $jobOrderSelect.append($('<option>').val(jo.value).text(jo.name)));
                     }
+                    if (initialJobOrderId && $jobOrderSelect.find('option').toArray().some(option => option.value === String(initialJobOrderId))) {
+                        $jobOrderSelect.val(String(initialJobOrderId));
+                    }
+                    initialJobOrderId = null;
                     $jobOrderSelect.trigger('change');
                 } catch {
                     console.error('Failed to load job orders');
@@ -946,6 +951,9 @@
                 } catch {
                     ModernAlert.error("An error occurred while creating the billing.");
                 }
+            }
+            if ($('#CustomerId').val()) {
+                $('#CustomerId').trigger('change');
             }
         });
     </script>

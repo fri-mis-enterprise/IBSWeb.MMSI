@@ -91,6 +91,7 @@
             // Get status from URL on load
             const urlParams = new URLSearchParams(window.location.search);
             const statusFilter = urlParams.get('status') || '';
+            const billingNumber = urlParams.get('billingNumber') || '';
 
             let table = $('#paginatedTable').DataTable(ModernTable.config({
                 order: [[0, 'desc']],
@@ -165,8 +166,14 @@
                 ],
                 initComplete: function() {
                     if (statusFilter) {
-                        this.api().column(7).search(statusFilter).draw();
+                        this.api().column(7).search(statusFilter);
                         updateFilterButtons(statusFilter);
+                    }
+                    if (billingNumber) {
+                        this.api().search(billingNumber);
+                    }
+                    if (statusFilter || billingNumber) {
+                        this.api().draw();
                     }
                 }
             }));

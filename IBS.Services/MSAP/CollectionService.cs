@@ -24,6 +24,28 @@ namespace IBS.Services.MSAP
             return collection;
         }
 
+        private async Task<string?> ValidateProgressAsync(CreateCollectionViewModel model, CancellationToken ct)
+        {
+            if (model.BillingPayments == null)
+            {
+                return null;
+            }
+            foreach (var payment in model.BillingPayments)
+            {
+                var billing = await unitOfWork.Billing.GetAsync(b => b.MsapBillingId == payment.BillingId, ct);
+                if (billing == null || billing.Status is not (MsapConstants.BillingStatus.ForCollection or MsapConstants.BillingStatus.Collected))
+                {
+                    return "Only posted billings can receive collection. Review and post all billings first.";
+                }
+                string? blocker = await JobProgressCalculator.GetBillingBlockerAsync(unitOfWork, billing, JobProgressCalculator.CollectionStage, ct);
+                if (blocker != null)
+                {
+                    return blocker;
+                }
+            }
+            return null;
+        }
+
         public async Task<ServiceResult<int>> CreateCollectionAsync(CreateCollectionViewModel viewModel, string username, CancellationToken cancellationToken)
         {
             try
@@ -32,6 +54,12 @@ namespace IBS.Services.MSAP
                 if (guard != null)
                 {
                     return ServiceResult<int>.Failure(guard.Message!);
+                }
+
+                string? progressBlocker = await ValidateProgressAsync(viewModel, cancellationToken);
+                if (progressBlocker != null)
+                {
+                    return ServiceResult<int>.Failure(progressBlocker);
                 }
 
                 int collectionId = 0;
@@ -124,6 +152,12 @@ namespace IBS.Services.MSAP
                     if (currentModel.IsPrinted)
                     {
                         throw new InvalidOperationException("Cannot edit a collection that has already been printed.");
+                    }
+
+                    string? progressBlocker = await ValidateProgressAsync(viewModel, cancellationToken);
+                    if (progressBlocker != null)
+                    {
+                        throw new InvalidOperationException(progressBlocker);
                     }
 
                     // Revert old allocations

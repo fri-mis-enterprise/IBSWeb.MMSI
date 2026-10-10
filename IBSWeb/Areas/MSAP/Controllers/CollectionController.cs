@@ -41,9 +41,18 @@ namespace IBSWeb.Areas.MSAP.Controllers
         /// </summary>
         [HttpGet]
         [RequireAccess(ProcedureEnum.CreateCollection, "Access denied. You don't have permission to create Collections.")]
-        public async Task<IActionResult> Create(CancellationToken cancellationToken = default)
+        public async Task<IActionResult> Create(CancellationToken cancellationToken = default, int? jobOrderId = null)
         {
             var model = await collectionService.PopulateCreateViewModelAsync(cancellationToken);
+            if (jobOrderId.HasValue)
+            {
+                var job = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == jobOrderId.Value, cancellationToken);
+                if (job == null)
+                {
+                    return NotFound();
+                }
+                model.CustomerId = job.CustomerId;
+            }
             return View(model);
         }
 

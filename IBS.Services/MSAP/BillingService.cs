@@ -70,30 +70,15 @@ namespace IBS.Services.MSAP
                         {
                             model.COSNumber = jobOrder.COSNumber;
                         }
-
-                        // Block billing if any ticket under this Job Order is not yet ready for billing
-                        var unreadyStatuses = new[]
-                        {
-                            MsapConstants.DispatchTicketStatus.ForTariff,
-                            MsapConstants.DispatchTicketStatus.ForApproval
-                        };
-
-                        var hasUnreadyTickets = jobOrder.DispatchTickets
-                            .Any(dt => unreadyStatuses.Contains(dt.Status));
-
-                        if (hasUnreadyTickets)
-                        {
-                            var unreadyList = jobOrder.DispatchTickets
-                                .Where(dt => unreadyStatuses.Contains(dt.Status))
-                                .Select(dt => $"#{dt.DispatchNumber} ({dt.Status})")
-                                .ToList();
-
-                            return ServiceResult<int>.Failure(
-                                $"Cannot create billing — the following ticket(s) under Job Order #{jobOrder.JobOrderNumber} are not yet ready: {string.Join(", ", unreadyList)}.");
-                        }
                     }
                 }
 
+
+                string? progressBlocker = await JobProgressCalculator.GetBlockerAsync(unitOfWork, model.JobOrderId, JobProgressCalculator.BillingStage, cancellationToken);
+                if (progressBlocker != null)
+                {
+                    return ServiceResult<int>.Failure(progressBlocker);
+                }
 
                 var customer = await unitOfWork.Customer.GetAsync(c => c.CustomerId == model.CustomerId, cancellationToken);
                 if (customer == null)
@@ -166,6 +151,12 @@ namespace IBS.Services.MSAP
                     if (dt.CustomerId != model.CustomerId)
                     {
                         return ServiceResult<int>.Failure($"Ticket #{dt.DispatchNumber} does not belong to the selected customer.");
+                    }
+
+                    string? ticketBlocker = await JobProgressCalculator.GetBlockerAsync(unitOfWork, dt.JobOrderId, JobProgressCalculator.BillingStage, cancellationToken);
+                    if (ticketBlocker != null)
+                    {
+                        return ServiceResult<int>.Failure(ticketBlocker);
                     }
 
                     if (dt.Status != MsapConstants.DispatchTicketStatus.ForBilling || dt.BillingId.HasValue)
@@ -257,6 +248,12 @@ namespace IBS.Services.MSAP
                 if (guard != null)
                 {
                     return guard;
+                }
+
+                string? progressBlocker = await JobProgressCalculator.GetBillingBlockerAsync(unitOfWork, billing, JobProgressCalculator.PostingStage, cancellationToken);
+                if (progressBlocker != null)
+                {
+                    return ServiceResult.Failure(progressBlocker);
                 }
 
                 await unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -368,6 +365,24 @@ namespace IBS.Services.MSAP
                 if (customer == null)
                 {
                     return ServiceResult.Failure("Customer not found.");
+                }
+
+                string? progressBlocker = await JobProgressCalculator.GetBlockerAsync(unitOfWork, currentModel.JobOrderId, JobProgressCalculator.BillingStage, cancellationToken);
+                if (progressBlocker != null)
+                {
+                    return ServiceResult.Failure(progressBlocker);
+                }
+                if (model.ToBillDispatchTickets != null)
+                {
+                    foreach (var ticketId in model.ToBillDispatchTickets)
+                    {
+                        var ticket = await unitOfWork.DispatchTicket.GetAsync(t => t.DispatchTicketId == int.Parse(ticketId), cancellationToken);
+                        string? blocker = await JobProgressCalculator.GetBlockerAsync(unitOfWork, ticket?.JobOrderId, JobProgressCalculator.BillingStage, cancellationToken);
+                        if (blocker != null)
+                        {
+                            return ServiceResult.Failure(blocker);
+                        }
+                    }
                 }
 
                 // Update ticket billing references only when ticket selection was submitted
@@ -623,6 +638,12 @@ namespace IBS.Services.MSAP
                 return ServiceResult<JobOrderBillingDto>.Failure("Job Order not found");
             }
 
+            string? blocker = await JobProgressCalculator.GetBlockerAsync(unitOfWork, jobOrderId, JobProgressCalculator.BillingStage, cancellationToken);
+            if (blocker != null)
+            {
+                return ServiceResult<JobOrderBillingDto>.Failure(blocker);
+            }
+
             var tickets = jobOrder.DispatchTickets
                 .Where(t => t is { Status: MsapConstants.DispatchTicketStatus.ForBilling, BillingId: null })
                 .Select(t => new JobOrderTicketDto
@@ -845,6 +866,17 @@ namespace IBS.Services.MSAP
                     var dt = await unitOfWork.DispatchTicket.GetAsync(t => t.DispatchTicketId == int.Parse(idStr), cancellationToken);
                     if (dt == null)
                         return ServiceResult<(int, int)>.Failure($"Dispatch ticket #{idStr} not found.");
+
+                    if (dt.Status != MsapConstants.DispatchTicketStatus.ForBilling || dt.BillingId.HasValue
+                        || dt.CustomerId != model.CustomerId || (model.JobOrderId.HasValue && dt.JobOrderId != model.JobOrderId))
+                    {
+                        return ServiceResult<(int, int)>.Failure($"Ticket #{dt.DispatchNumber} is not available for this billing.");
+                    }
+                    string? blocker = await JobProgressCalculator.GetBlockerAsync(unitOfWork, dt.JobOrderId, JobProgressCalculator.BillingStage, cancellationToken);
+                    if (blocker != null)
+                    {
+                        return ServiceResult<(int, int)>.Failure(blocker);
+                    }
 
                     if (model.BafRates != null && model.BafRates.TryGetValue(dt.DispatchTicketId, out var bafRate))
                     {
