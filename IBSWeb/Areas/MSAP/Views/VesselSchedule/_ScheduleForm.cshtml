@@ -7,6 +7,14 @@
                 <p class="schedule-muted">Plan the time window, then assign tugboats. All times are Philippine time.</p></div>
             <a asp-action="Day" asp-route-date="@Model.PlannedStart.ToString("yyyy-MM-dd")" class="modern-btn-secondary"><span class="material-symbols-outlined">arrow_back</span> Daily schedules</a>
         </div>
+        <section class="modern-card schedule-progress-card" data-status="@Model.Status" aria-labelledby="scheduleProgressTitle">
+            <div class="schedule-progress-heading">
+                <div><span class="modern-label">Schedule status</span><h2 id="scheduleProgressTitle">@(Model.VesselScheduleId == 0 ? "Save as Tentative" : Model.Status)</h2></div>
+                <span class="material-symbols-outlined schedule-progress-emblem" aria-hidden="true">edit_calendar</span>
+            </div>
+            <partial name="_ScheduleProgress" model="Model.Status" />
+            <p class="schedule-muted">@(Model.VesselScheduleId == 0 ? "Saving creates a tentative booking. Next, review and confirm it to create the Job Order." : "Revisions keep the current schedule status. Use Schedule Details to confirm or close the booking.") Actual service times are recorded in Dispatch Tickets.</p>
+        </section>
         <form method="post" id="scheduleForm" data-terminals-url="@Url.Action("GetTerminalsByPort")" data-bookings-url="@Url.Action("GetTugboatBookings")" data-details-url="@Url.Action("Details")">
             @Html.AntiForgeryToken()
             <input asp-for="VesselScheduleId" type="hidden" />
@@ -23,6 +31,11 @@
                     <div class="modern-card-header-info"><span class="material-symbols-outlined">schedule</span><h2 class="modern-headline-md">Booking details</h2></div>
                     <div class="modern-card-body">
                         <div class="schedule-fields">
+                            <div class="schedule-field schedule-field-wide">
+                                <label asp-for="CustomerId" class="modern-label"></label>
+                                <select asp-for="CustomerId" asp-items="Model.Customers" class="js-modern-select" required><option value="">Select customer</option></select>
+                                <span asp-validation-for="CustomerId" class="text-error text-xs"></span>
+                            </div>
                             <div class="schedule-field">
                                 <label asp-for="VesselId" class="modern-label"></label>
                                 <select asp-for="VesselId" asp-items="Model.Vessels" class="js-modern-select" required><option value="">Select vessel</option></select>
@@ -55,29 +68,6 @@
                                 <span asp-validation-for="PlannedEnd" class="text-error text-xs"></span>
                             </div>
                         </div>
-                        <fieldset class="schedule-status-fieldset">
-                            <legend class="modern-label">Schedule status</legend>
-                            <div class="schedule-status-options">
-                                @for (var index = 0; index < Model.Statuses.Count; index++)
-                                {
-                                    var status = Model.Statuses[index];
-                                    var hint = status.Value switch
-                                    {
-                                        "Tentative" => "Plan now, assign tugs later",
-                                        "Confirmed" => "At least one tug assigned",
-                                        "In Progress" => "Underway · at least one tug",
-                                        "Completed" => "Read-only after saving",
-                                        "Cancelled" => "Read-only · bookings released",
-                                        _ => status.Text
-                                    };
-                                    <label class="schedule-status-choice" data-status="@status.Value" for="scheduleStatus_@index">
-                                        <input asp-for="Status" type="radio" id="scheduleStatus_@index" value="@status.Value" aria-describedby="scheduleStatusHint_@index" />
-                                        <span><strong>@status.Text</strong><small id="scheduleStatusHint_@index">@hint</small></span>
-                                    </label>
-                                }
-                            </div>
-                            <span asp-validation-for="Status" class="text-error text-xs"></span>
-                        </fieldset>
                         <div class="schedule-field">
                             <label asp-for="Notes" class="modern-label"></label>
                             <textarea asp-for="Notes" class="modern-input" rows="2" placeholder="Planning instructions or remarks"></textarea>

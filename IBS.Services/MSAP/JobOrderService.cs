@@ -78,12 +78,12 @@ namespace IBS.Services.MSAP
                 }
 
                 jobOrder.Status = MsapConstants.JobOrderStatus.Open;
-                jobOrder.JobOrderNumber = await unitOfWork.JobOrder.GenerateJobOrderNumber(cancellationToken);
                 jobOrder.CreatedBy = username;
                 jobOrder.CreatedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
                 await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    jobOrder.JobOrderNumber = await unitOfWork.JobOrder.GenerateJobOrderNumber(cancellationToken);
                     await unitOfWork.JobOrder.AddAsync(jobOrder, cancellationToken);
                     await unitOfWork.SaveAsync(cancellationToken);
                     await RecordAuditAsync($"Created Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
@@ -115,9 +115,15 @@ namespace IBS.Services.MSAP
                     return guard;
                 }
 
-                if (jobOrder.Status == MsapConstants.JobOrderStatus.Closed)
+                if (jobOrder.Status != MsapConstants.JobOrderStatus.Open)
                 {
                     return ServiceResult.Failure($"Job Order #{jobOrder.JobOrderNumber} is {jobOrder.Status.ToLower()} and cannot be edited.");
+                }
+
+                if (await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == model.JobOrderId &&
+                    s.Status == MsapConstants.VesselScheduleStatus.Completed, cancellationToken) != null)
+                {
+                    return ServiceResult.Failure("The vessel booking is completed. Its planned details cannot be revised.");
                 }
 
                 if (await unitOfWork.Billing.GetAsync(b => b.JobOrderId == model.JobOrderId && b.Status == MsapConstants.BillingStatus.ForPosting, cancellationToken) != null)
@@ -160,6 +166,93 @@ namespace IBS.Services.MSAP
             {
                 logger.LogError(ex, "Error updating Job Order {JobOrderId}", model.JobOrderId);
                 return ServiceResult.Failure($"Failed to update Job Order: {ExceptionHelper.GetErrorMessage(ex)}");
+            }
+        }
+
+        public Task<ServiceResult> CancelJobOrderAsync(int id, string username, CancellationToken ct = default)
+        {
+            return ChangeBookingStatusAsync(id, MsapConstants.VesselScheduleStatus.Cancelled, username, ct);
+        }
+
+        public Task<ServiceResult> CompleteBookingAsync(int id, string username, CancellationToken ct = default)
+        {
+            return ChangeBookingStatusAsync(id, MsapConstants.VesselScheduleStatus.Completed, username, ct);
+        }
+
+        private async Task<ServiceResult> ChangeBookingStatusAsync(int id, string status, string username, CancellationToken ct)
+        {
+            var result = ServiceResult.Failure("Failed to update the booking. Please try again.");
+            try
+            {
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
+                {
+                    // Booking actions always lock the schedule before its Job Order.
+                    var schedule = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == id, ct);
+                    if (schedule != null)
+                    {
+                        schedule = await unitOfWork.VesselSchedule.GetForUpdateAsync(schedule.VesselScheduleId, ct);
+                    }
+                    var job = await unitOfWork.JobOrder.GetForUpdateAsync(id, ct);
+                    if (job == null)
+                    {
+                        result = ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
+                        return;
+                    }
+                    if (job.Status == MsapConstants.JobOrderStatus.Cancelled ||
+                        schedule?.Status is MsapConstants.VesselScheduleStatus.Cancelled or MsapConstants.VesselScheduleStatus.Completed)
+                    {
+                        result = ServiceResult.Failure("This booking is already completed or cancelled.", ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    var tickets = (await unitOfWork.DispatchTicket.GetAllAsync(t => t.JobOrderId == id, ct)).ToList();
+                    if (status == MsapConstants.VesselScheduleStatus.Cancelled)
+                    {
+                        var guard = await GuardClosedPeriodAsync(job.Date, ct);
+                        if (guard != null)
+                        {
+                            result = guard;
+                            return;
+                        }
+                        if (job.Status != MsapConstants.JobOrderStatus.Open || tickets.Any(t => t.Status != MsapConstants.DispatchTicketStatus.Deleted || t.BillingId != null)
+                            || await unitOfWork.Billing.GetAsync(b => b.JobOrderId == id, ct) != null)
+                        {
+                            result = ServiceResult.Failure("Cannot cancel this Job Order. Resolve its active Dispatch Tickets and billing first. Posted billing must follow the reversal workflow.", ServiceResultStatus.ValidationError);
+                            return;
+                        }
+                        job.Status = MsapConstants.JobOrderStatus.Cancelled;
+                        job.EditedBy = username;
+                        job.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+                        await RecordAuditAsync($"Cancelled Job Order #{job.JobOrderNumber}; linked booking cancelled and records retained.", username, ct, id, job.JobOrderNumber);
+                    }
+                    else
+                    {
+                        var active = tickets.Where(t => t.Status != MsapConstants.DispatchTicketStatus.Deleted).ToList();
+                        if (schedule == null || active.Count == 0 || active.Any(t => t.DateLeft == null || t.TimeLeft == null || t.DateArrived == null || t.TimeArrived == null
+                            || t.DateArrived.Value.ToDateTime(t.TimeArrived.Value) <= t.DateLeft.Value.ToDateTime(t.TimeLeft.Value)
+                            || t.DateArrived.Value.ToDateTime(t.TimeArrived.Value) > DateTimeHelper.GetCurrentPhilippineTime()))
+                        {
+                            result = ServiceResult.Failure("Record valid actual start and end times for all active Dispatch Tickets before completing the vessel booking.", ServiceResultStatus.ValidationError);
+                            return;
+                        }
+                    }
+                    if (schedule != null)
+                    {
+                        schedule.Status = status;
+                        schedule.EditedBy = username;
+                        schedule.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+                        await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Vessel schedule #{schedule.VesselScheduleId} marked {status} through Job Order #{job.JobOrderNumber}.", "Vessel Schedule", schedule.VesselScheduleId), ct);
+                    }
+                    await unitOfWork.SaveAsync(ct);
+                    result = ServiceResult.Success(status == MsapConstants.VesselScheduleStatus.Cancelled
+                        ? "Job Order and linked vessel booking cancelled. Records were retained."
+                        : "Vessel booking completed. Billing and collection can continue through the Job Order.");
+                }, ct);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to change booking status for Job Order {Id}", id);
+                return ServiceResult.Failure("Failed to update the booking. Please try again.");
             }
         }
 
@@ -242,7 +335,7 @@ namespace IBS.Services.MSAP
                 }
 
                 var jobOrder = await unitOfWork.JobOrder.GetAsync(jo => jo.JobOrderId == jobOrderId, cancellationToken);
-                if (jobOrder == null || jobOrder.Status == MsapConstants.JobOrderStatus.Closed)
+                if (jobOrder == null || jobOrder.Status != MsapConstants.JobOrderStatus.Open)
                 {
                     return;
                 }
@@ -279,6 +372,13 @@ namespace IBS.Services.MSAP
                     return ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
                 }
 
+                if (jobOrder.Status != MsapConstants.JobOrderStatus.Open ||
+                    await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == jobOrderId &&
+                        (s.Status == MsapConstants.VesselScheduleStatus.Completed || s.Status == MsapConstants.VesselScheduleStatus.Cancelled), cancellationToken) != null)
+                {
+                    return ServiceResult.Failure("Cannot change tug assignments for a closed, cancelled or operationally completed booking.");
+                }
+
                 var guard = await GuardClosedPeriodAsync(jobOrder.Date, cancellationToken);
                 if (guard != null)
                 {
@@ -298,42 +398,52 @@ namespace IBS.Services.MSAP
                     return ServiceResult.Failure("Tugboat is already assigned to this Job Order.");
                 }
 
-                if (jobOrder.PreferredTugboatId == null)
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    jobOrder.PreferredTugboatId = tugboatId;
-                }
-                else
-                {
-                    // Assign as an additional tugboat by creating a pending DispatchTicket
-                    var services = await unitOfWork.Service.GetAllAsync(cancellationToken: cancellationToken);
-                    var service = services.FirstOrDefault();
-                    if (service == null)
+                    jobOrder = await unitOfWork.JobOrder.GetForUpdateAsync(jobOrderId, cancellationToken);
+                    var booking = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == jobOrderId, cancellationToken);
+                    if (jobOrder?.Status != MsapConstants.JobOrderStatus.Open ||
+                        booking?.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
                     {
-                        return ServiceResult.Failure("Cannot assign tugboat: no service configured.");
+                        throw new InvalidOperationException("Cannot assign tugs to a closed, cancelled or operationally completed booking.");
                     }
-                    int serviceId = service.ServiceId;
-
-                    var ticket = new DispatchTicket
+                    if (jobOrder.PreferredTugboatId == null)
                     {
-                        JobOrderId = jobOrder.JobOrderId,
-                        TugBoatId = tugboatId,
-                        CustomerId = jobOrder.CustomerId,
-                        VesselId = jobOrder.VesselId,
-                        PortId = jobOrder.PortId,
-                        TerminalId = jobOrder.TerminalId,
-                        ServiceId = serviceId,
-                        Date = DateOnly.FromDateTime(DateTimeHelper.GetCurrentPhilippineTime()),
-                        DispatchNumber = $"P{jobOrder.JobOrderId:X}T{tugboatId:X}",
-                        Status = MsapConstants.DispatchTicketStatus.ForTariff,
-                        CreatedBy = username,
-                        CreatedDate = DateTimeHelper.GetCurrentPhilippineTime()
-                    };
+                        jobOrder.PreferredTugboatId = tugboatId;
+                    }
+                    else
+                    {
+                        // Assign as an additional tugboat by creating a pending DispatchTicket
+                        var services = await unitOfWork.Service.GetAllAsync(cancellationToken: cancellationToken);
+                        var service = services.FirstOrDefault();
+                        if (service == null)
+                        {
+                            throw new InvalidOperationException("Cannot assign tugboat: no service configured.");
+                        }
+                        int serviceId = service.ServiceId;
 
-                    await unitOfWork.DispatchTicket.AddAsync(ticket, cancellationToken);
-                }
+                        var ticket = new DispatchTicket
+                        {
+                            JobOrderId = jobOrder.JobOrderId,
+                            TugBoatId = tugboatId,
+                            CustomerId = jobOrder.CustomerId,
+                            VesselId = jobOrder.VesselId,
+                            PortId = jobOrder.PortId,
+                            TerminalId = jobOrder.TerminalId,
+                            ServiceId = serviceId,
+                            Date = DateOnly.FromDateTime(DateTimeHelper.GetCurrentPhilippineTime()),
+                            DispatchNumber = $"P{jobOrder.JobOrderId:X}T{tugboatId:X}",
+                            Status = MsapConstants.DispatchTicketStatus.ForTariff,
+                            CreatedBy = username,
+                            CreatedDate = DateTimeHelper.GetCurrentPhilippineTime()
+                        };
 
-                await RecordAuditAsync($"Assigned tugboat {tugboat.TugboatName} to Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
-                await unitOfWork.SaveAsync(cancellationToken);
+                        await unitOfWork.DispatchTicket.AddAsync(ticket, cancellationToken);
+                    }
+
+                    await RecordAuditAsync($"Assigned tugboat {tugboat.TugboatName} to Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
+                    await unitOfWork.SaveAsync(cancellationToken);
+                }, cancellationToken);
 
                 return ServiceResult.Success("Tugboat assigned successfully.");
             }
@@ -354,6 +464,13 @@ namespace IBS.Services.MSAP
                     return ServiceResult.Failure("Job Order not found.", ServiceResultStatus.NotFound);
                 }
 
+                if (jobOrder.Status != MsapConstants.JobOrderStatus.Open ||
+                    await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == jobOrderId &&
+                        (s.Status == MsapConstants.VesselScheduleStatus.Completed || s.Status == MsapConstants.VesselScheduleStatus.Cancelled), cancellationToken) != null)
+                {
+                    return ServiceResult.Failure("Cannot change tug assignments for a closed, cancelled or operationally completed booking.");
+                }
+
                 var guard = await GuardClosedPeriodAsync(jobOrder.Date, cancellationToken);
                 if (guard != null)
                 {
@@ -363,24 +480,34 @@ namespace IBS.Services.MSAP
                 var tug = await unitOfWork.Tugboat.GetAsync(t => t.TugboatId == tugboatId, cancellationToken);
                 string? tugboatName = tug?.TugboatName;
 
-                if (jobOrder.PreferredTugboatId == tugboatId)
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    jobOrder.PreferredTugboatId = null;
-                }
-
-                var ticketToRemove = jobOrder.DispatchTickets.FirstOrDefault(dt => dt.TugBoatId == tugboatId);
-                if (ticketToRemove != null)
-                {
-                    if (ticketToRemove.Status != MsapConstants.DispatchTicketStatus.ForTariff)
+                    var lockedJob = await unitOfWork.JobOrder.GetForUpdateAsync(jobOrderId, cancellationToken);
+                    var booking = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == jobOrderId, cancellationToken);
+                    if (lockedJob?.Status != MsapConstants.JobOrderStatus.Open ||
+                        booking?.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
                     {
-                        return ServiceResult.Failure("Cannot unassign a tugboat with an active or processed dispatch ticket.");
+                        throw new InvalidOperationException("Cannot unassign tugs from a closed, cancelled or operationally completed booking.");
+                    }
+                    if (jobOrder.PreferredTugboatId == tugboatId)
+                    {
+                        jobOrder.PreferredTugboatId = null;
                     }
 
-                    await unitOfWork.DispatchTicket.RemoveAsync(ticketToRemove, cancellationToken);
-                }
+                    var ticketToRemove = jobOrder.DispatchTickets.FirstOrDefault(dt => dt.TugBoatId == tugboatId);
+                    if (ticketToRemove != null)
+                    {
+                        if (ticketToRemove.Status != MsapConstants.DispatchTicketStatus.ForTariff)
+                        {
+                            throw new InvalidOperationException("Cannot unassign a tugboat with an active or processed dispatch ticket.");
+                        }
 
-                await RecordAuditAsync($"Unassigned tugboat {tugboatName ?? "Unknown"} from Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
-                await unitOfWork.SaveAsync(cancellationToken);
+                        await unitOfWork.DispatchTicket.RemoveAsync(ticketToRemove, cancellationToken);
+                    }
+
+                    await RecordAuditAsync($"Unassigned tugboat {tugboatName ?? "Unknown"} from Job Order #{jobOrder.JobOrderNumber}", username, cancellationToken, jobOrder.JobOrderId, jobOrder.JobOrderNumber);
+                    await unitOfWork.SaveAsync(cancellationToken);
+                }, cancellationToken);
 
                 return ServiceResult.Success("Tugboat unassigned successfully.");
             }

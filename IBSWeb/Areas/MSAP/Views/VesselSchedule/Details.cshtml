@@ -7,45 +7,164 @@
 }
 <link rel="stylesheet" href="~/msap/css/vessel-schedule.css" asp-append-version="true" />
 <div class="modern-layout">
-    <main class="modern-container schedule-workspace">
+    <main class="modern-container schedule-workspace schedule-details-workspace">
         <div class="flex-stack">
             <div><span class="modern-label">Vessel Schedule · #@Model.VesselScheduleId</span><h1 class="modern-headline-lg">@Model.Vessel.VesselName</h1><p class="schedule-muted">All times are Philippine time.</p></div>
             <div class="schedule-actions">
                 <a asp-action="Day" asp-route-date="@Model.PlannedStart.ToString("yyyy-MM-dd")" class="modern-btn-secondary"><span class="material-symbols-outlined">arrow_back</span> Daily schedules</a>
-                @if (!closed) { <a asp-action="Edit" asp-route-id="@Model.VesselScheduleId" class="modern-btn-primary"><span class="material-symbols-outlined">edit</span> Edit / change status</a> }
             </div>
         </div>
-        <div class="modern-card schedule-record">
-            <div class="schedule-toolbar"><h2>Booking details</h2><span class="schedule-status" data-status="@Model.Status">@Model.Status</span></div>
-            @if (closed) { <p class="schedule-muted">This schedule is read-only.</p> }
-            <dl>
-                <dt>Location</dt><dd>@Model.Port.PortName / @Model.Terminal.TerminalName</dd>
-                <dt>Voyage</dt><dd>@(Model.VoyageNumber ?? "—") · @(Model.VesselType ?? "—")</dd>
-                <dt>Planned start</dt><dd>@Model.PlannedStart.ToString("MMM d, yyyy · HH:mm")</dd>
-                <dt>Planned end</dt><dd>@Model.PlannedEnd.ToString("MMM d, yyyy · HH:mm")</dd>
-                <dt>Duration</dt><dd>@((Model.PlannedEnd - Model.PlannedStart).TotalHours.ToString("0.##")) hours</dd>
-                <dt>Tugboats</dt><dd>@tugs.Count assigned</dd>
-                <dt>Assigned tugs</dt><dd>@(tugs.Count == 0 ? "Not assigned yet" : string.Join(", ", tugs))</dd>
-                <dt>Created</dt><dd>@Model.CreatedDate.ToString("MMM d, yyyy HH:mm") by @Model.CreatedBy</dd>
-                @if (Model.EditedDate.HasValue) { <dt>Last edited</dt><dd>@Model.EditedDate.Value.ToString("MMM d, yyyy HH:mm") by @Model.EditedBy</dd> }
-            </dl>
-            @if (!string.IsNullOrWhiteSpace(Model.Notes)) { <h2>Notes</h2><p class="schedule-note">@Model.Notes</p> }
-        </div>
-        @if (Model.Status == MsapConstants.VesselScheduleStatus.Tentative)
-        {
-            <div class="modern-card schedule-record">
-                <h2>Remove a tentative plan</h2>
-                <p class="schedule-muted">Delete an entry made by mistake. For confirmed or started plans, use Cancelled to retain the record.</p>
-                <form asp-action="Delete" method="post" id="deleteSchedule">
-                    <input type="hidden" name="id" value="@Model.VesselScheduleId" />
-                    <button type="button" id="deleteScheduleButton" class="modern-btn-error"><span class="material-symbols-outlined">delete</span> Delete tentative schedule</button>
-                </form>
+        <section class="modern-card schedule-progress-card" data-status="@Model.Status" aria-labelledby="scheduleProgressTitle">
+            <div class="schedule-progress-heading">
+                <div><span class="modern-label">Booking progress</span><h2 id="scheduleProgressTitle">@Model.Status</h2></div>
+                @if (Model.JobOrderId.HasValue)
+                {
+                    <a asp-controller="JobOrder" asp-action="Details" asp-route-id="@Model.JobOrderId" class="schedule-progress-order"><span class="material-symbols-outlined" aria-hidden="true">assignment</span> @Model.JobOrder?.JobOrderNumber <span class="material-symbols-outlined" aria-hidden="true">arrow_outward</span></a>
+                }
             </div>
-        }
+            <partial name="_ScheduleProgress" model="Model.Status" />
+            @if (!closed)
+            {
+                <p class="schedule-muted">@(Model.JobOrderId.HasValue ? "Continue through the linked Job Order. Record actual service times in Dispatch Tickets, then complete the vessel booking from the Job Order." : "Review the booking and confirm the schedule to create its Job Order.")</p>
+            }
+        </section>
+        <div class="schedule-details-layout">
+            <section class="modern-card schedule-booking" aria-labelledby="bookingDetailsTitle">
+                <div class="schedule-booking-heading">
+                    <span class="material-symbols-outlined" aria-hidden="true">directions_boat</span>
+                    <h2 id="bookingDetailsTitle">Booking details</h2>
+                    @if (closed)
+                    {
+                        <span class="schedule-readonly"><span class="material-symbols-outlined" aria-hidden="true">lock</span> Read-only</span>
+                    }
+                </div>
+                <div class="schedule-booking-body">
+                    <dl class="schedule-booking-fields">
+                        <div class="schedule-booking-wide"><dt>Customer</dt><dd>@(Model.Customer?.CustomerName ?? "Select a customer before confirmation")</dd></div>
+                        <div><dt>Port</dt><dd>@Model.Port.PortName</dd></div>
+                        <div><dt>Terminal</dt><dd>@Model.Terminal.TerminalName</dd></div>
+                        <div><dt>Voyage number</dt><dd>@(Model.VoyageNumber ?? "—")</dd></div>
+                        <div><dt>Vessel type</dt><dd>@(Model.VesselType ?? "—")</dd></div>
+                    </dl>
+                    <section class="schedule-planned-window" aria-labelledby="plannedWindowTitle">
+                        <h3 id="plannedWindowTitle"><span class="material-symbols-outlined" aria-hidden="true">schedule</span> Planned service window</h3>
+                        <dl>
+                            <div><dt>Start</dt><dd><strong>@Model.PlannedStart.ToString("HH:mm")</strong><span>@Model.PlannedStart.ToString("MMM d, yyyy")</span></dd></div>
+                            <div><dt>End</dt><dd><strong>@Model.PlannedEnd.ToString("HH:mm")</strong><span>@Model.PlannedEnd.ToString("MMM d, yyyy")</span></dd></div>
+                            <div><dt>Duration</dt><dd><strong>@((Model.PlannedEnd - Model.PlannedStart).TotalHours.ToString("0.##")) <small>hours</small></strong><span>Philippine time</span></dd></div>
+                        </dl>
+                    </section>
+                    <section class="schedule-booking-tugs" aria-labelledby="assignedTugsTitle">
+                        <div class="schedule-toolbar"><h3 id="assignedTugsTitle">Assigned tugboats</h3><span class="schedule-assigned-count">@tugs.Count assigned</span></div>
+                        @if (tugs.Count == 0)
+                        {
+                            <p class="schedule-muted">No tugboats assigned yet.</p>
+                        }
+                        else
+                        {
+                            <ul class="schedule-booking-chips" aria-label="Assigned tugboats">
+                                @foreach (var tug in tugs)
+                                {
+                                    <li><span class="material-symbols-outlined" aria-hidden="true">directions_boat</span> @tug</li>
+                                }
+                            </ul>
+                        }
+                    </section>
+                    @if (!string.IsNullOrWhiteSpace(Model.Notes))
+                    {
+                        <section class="schedule-booking-notes" aria-labelledby="bookingNotesTitle"><h3 id="bookingNotesTitle">Planning notes</h3><p class="schedule-note">@Model.Notes</p></section>
+                    }
+                </div>
+                <div class="schedule-booking-footer">
+                    <span>Created @Model.CreatedDate.ToString("MMM d, yyyy · HH:mm") by @Model.CreatedBy</span>
+                    @if (Model.EditedDate.HasValue)
+                    {
+                        <span>Updated @Model.EditedDate.Value.ToString("MMM d, yyyy · HH:mm") by @Model.EditedBy</span>
+                    }
+                </div>
+            </section>
+            <aside class="modern-card schedule-booking-actions" aria-labelledby="bookingActionsTitle">
+                <div class="schedule-booking-heading"><span class="material-symbols-outlined" aria-hidden="true">touch_app</span><h2 id="bookingActionsTitle">Booking actions</h2></div>
+                <div class="schedule-booking-body">
+                    @if (Model.JobOrderId.HasValue)
+                    {
+                        <div class="schedule-next-action">
+                            <h3>Continue in Job Order</h3>
+                            <p class="schedule-muted">View dispatch tickets and record service details.</p>
+                            <a asp-controller="JobOrder" asp-action="Details" asp-route-id="@Model.JobOrderId" class="modern-btn-primary"><span class="material-symbols-outlined" aria-hidden="true">assignment</span> Open Job Order <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a>
+                        </div>
+                    }
+                    else if (!closed && ViewBag.CanConfirm == true)
+                    {
+                        <div class="schedule-next-action">
+                            <h3>Ready to confirm?</h3>
+                            <p class="schedule-muted">Review the booking and assigned tugs before creating its Job Order.</p>
+                            <a asp-action="Confirm" asp-route-id="@Model.VesselScheduleId" class="modern-btn-primary"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> Confirm Schedule <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a>
+                        </div>
+                    }
+                    @if (!closed && ViewBag.CanEdit == true)
+                    {
+                        <div class="schedule-action-item">
+                            <h3>Adjust the booking</h3><p class="schedule-muted">Update planned times, location or tug assignments.</p>
+                            <a asp-action="Edit" asp-route-id="@Model.VesselScheduleId" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span> Revise Schedule</a>
+                        </div>
+                        @if (Model.JobOrderId.HasValue)
+                        {
+                            <div class="schedule-action-item"><h3>Finish the vessel booking</h3><p class="schedule-muted">Complete operations from the Job Order after recording actual service times. Billing and collection can continue afterward.</p></div>
+                        }
+                        <div class="schedule-action-item schedule-action-cancel">
+                            @if (ViewBag.HasDispatchTickets == true)
+                            {
+                                <h3>Manage cancellation in Job Order</h3><p class="schedule-muted">Resolve existing Dispatch Tickets and billing in the linked Job Order before cancelling the booking.</p>
+                            }
+                            else
+                            {
+                                <h3>Cancel this booking</h3><p class="schedule-muted">@(Model.JobOrderId.HasValue ? "Cancels the schedule and its Job Order together. Records are retained." : "Release the tug bookings and keep this plan on record.")</p>
+                                <form asp-action="Cancel" method="post" data-schedule-action="Cancel">
+                                    <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                                    <button type="submit" class="modern-btn-error"><span class="material-symbols-outlined" aria-hidden="true">event_busy</span> Cancel Booking</button>
+                                </form>
+                            }
+                        </div>
+                    }
+                    @if (closed)
+                    {
+                        <p class="schedule-muted">This booking is closed. Schedule changes are no longer available.</p>
+                    }
+                    @if (Model.Status == MsapConstants.VesselScheduleStatus.Tentative && Model.JobOrderId == null)
+                    {
+                        <details class="schedule-delete-option">
+                            <summary>Created by mistake?</summary>
+                            <p class="schedule-muted">Delete this tentative plan permanently, or cancel it to keep the record.</p>
+                            <form asp-action="Delete" method="post" id="deleteSchedule">
+                                <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                                <button type="button" id="deleteScheduleButton" class="modern-btn-error"><span class="material-symbols-outlined" aria-hidden="true">delete</span> Delete tentative schedule</button>
+                            </form>
+                        </details>
+                    }
+                </div>
+            </aside>
+        </div>
     </main>
 </div>
 @section Scripts {
     <script>
+        document.querySelectorAll('[data-schedule-action]').forEach(form => {
+            let reviewing = false;
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (reviewing) return;
+                reviewing = true;
+                const action = form.dataset.scheduleAction;
+                const result = await ModernAlert.confirm({ title: action + ' schedule?', text: 'This cancels the schedule and any linked Job Order together. The booking becomes read-only and records are retained.', icon: 'warning', confirmText: action + ' Schedule' });
+                if (result.isConfirmed) {
+                    ModernAlert.showLoading('Updating schedule…');
+                    form.submit();
+                } else {
+                    reviewing = false;
+                }
+            });
+        });
         document.getElementById('deleteScheduleButton')?.addEventListener('click', function () {
             const form = document.getElementById('deleteSchedule');
             ModernAlert.confirm({ title: 'Delete tentative schedule?', text: 'This removes the plan permanently.', icon: 'warning', confirmText: 'Delete schedule' })

@@ -9,12 +9,15 @@ namespace IBS.Services.MSAP
 {
     public class VesselScheduleService(
         IUnitOfWork unitOfWork,
+        JobOrderService jobOrderService,
         ILogger<VesselScheduleService> logger) : IVesselScheduleService
     {
         public async Task<ServiceResult<int>> CreateAsync(VesselSchedule model, string username, CancellationToken ct = default, bool allowConflicts = false)
         {
             try
             {
+                model.Status = MsapConstants.VesselScheduleStatus.Tentative;
+                model.JobOrderId = null;
                 var error = await ValidateAsync(model, allowConflicts, ct);
                 if (error != null) return ServiceResult<int>.Failure(error, ServiceResultStatus.ValidationError);
 
@@ -42,65 +45,247 @@ namespace IBS.Services.MSAP
 
         public async Task<ServiceResult> UpdateAsync(VesselSchedule model, string username, CancellationToken ct = default, bool allowConflicts = false)
         {
+            var result = ServiceResult.Failure("Failed to update schedule. Please try again.");
             try
             {
-                var existing = await unitOfWork.VesselSchedule.GetAsync(s => s.VesselScheduleId == model.VesselScheduleId, ct);
-                if (existing == null)
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    return ServiceResult.Failure("Schedule not found.", ServiceResultStatus.NotFound);
-                }
+                    var existing = await unitOfWork.VesselSchedule.GetForUpdateAsync(model.VesselScheduleId, ct);
+                    if (existing == null)
+                    {
+                        result = ServiceResult.Failure("Schedule not found.", ServiceResultStatus.NotFound);
+                        return;
+                    }
+                    if (existing.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
+                    {
+                        result = ServiceResult.Failure("Cannot edit a completed or cancelled schedule.", ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    model.Status = existing.Status;
+                    var error = await ValidateAsync(model, allowConflicts, ct);
+                    if (error != null)
+                    {
+                        result = ServiceResult.Failure(error, ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    if (existing.JobOrderId.HasValue)
+                    {
+                        var job = await unitOfWork.JobOrder.GetAsync(j => j.JobOrderId == existing.JobOrderId.Value, ct);
+                        if (job == null)
+                        {
+                            result = ServiceResult.Failure("Linked Job Order not found.", ServiceResultStatus.NotFound);
+                            return;
+                        }
+                        if (await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == job.JobOrderId &&
+                            (t.BillingId != null || t.Status == MsapConstants.DispatchTicketStatus.Billed), ct) != null)
+                        {
+                            result = ServiceResult.Failure("This booking has billed or reserved tickets. Resolve the billing before revising the schedule.", ServiceResultStatus.ValidationError);
+                            return;
+                        }
+                        var date = DateOnly.FromDateTime(model.PlannedStart);
+                        if (await unitOfWork.PostedPeriod.IsMonthClosedAsync(date.Year, date.Month, ct))
+                        {
+                            result = ServiceResult.Failure($"Cannot move the booking into closed period {date:MMMM yyyy}.", ServiceResultStatus.ValidationError);
+                            return;
+                        }
+                        var revision = BuildJobOrder(model);
+                        revision.JobOrderId = job.JobOrderId;
+                        revision.COSNumber = job.COSNumber;
+                        revision.Remarks = job.Remarks;
+                        var updated = await jobOrderService.UpdateJobOrderAsync(revision, username, ct);
+                        if (!updated.IsSuccess)
+                        {
+                            result = updated;
+                            throw new InvalidOperationException(updated.Message);
+                        }
+                    }
+                    existing.CustomerId = model.CustomerId;
+                    existing.VesselId = model.VesselId;
+                    existing.PortId = model.PortId;
+                    existing.TerminalId = model.TerminalId;
+                    existing.PlannedStart = model.PlannedStart;
+                    existing.PlannedEnd = model.PlannedEnd;
+                    existing.AssignedTugboatIds = model.AssignedTugboatIds;
+                    existing.VoyageNumber = model.VoyageNumber;
+                    existing.VesselType = model.VesselType;
+                    existing.Notes = model.Notes;
+                    existing.EditedBy = username;
+                    existing.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+                    await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Updated vessel schedule #{model.VesselScheduleId}. Overlap override: {allowConflicts}", "Vessel Schedule", model.VesselScheduleId), ct);
+                    await unitOfWork.SaveAsync(ct);
+                    result = ServiceResult.Success(existing.JobOrderId.HasValue
+                        ? "Schedule and linked Job Order updated successfully."
+                        : "Schedule updated successfully.");
+                }, ct);
 
-                if (existing.Status == MsapConstants.VesselScheduleStatus.Completed || existing.Status == MsapConstants.VesselScheduleStatus.Cancelled)
-                {
-                    return ServiceResult.Failure("Cannot edit a completed or cancelled schedule.", ServiceResultStatus.ValidationError);
-                }
-
-                var error = await ValidateAsync(model, allowConflicts, ct);
-                if (error != null) return ServiceResult.Failure(error, ServiceResultStatus.ValidationError);
-                var previousStatus = existing.Status;
-
-                existing.VesselId = model.VesselId;
-                existing.PortId = model.PortId;
-                existing.TerminalId = model.TerminalId;
-                existing.PlannedStart = model.PlannedStart;
-                existing.PlannedEnd = model.PlannedEnd;
-                existing.AssignedTugboatIds = model.AssignedTugboatIds;
-                existing.VoyageNumber = model.VoyageNumber;
-                existing.VesselType = model.VesselType;
-                existing.Status = model.Status;
-                existing.Notes = model.Notes;
-                existing.EditedBy = username;
-                existing.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
-
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Updated vessel schedule #{model.VesselScheduleId} ({previousStatus} → {model.Status}). Overlap override: {allowConflicts}", "Vessel Schedule", model.VesselScheduleId), ct);
-                await unitOfWork.SaveAsync(ct);
-
-                return ServiceResult.Success("Schedule updated successfully.");
+                return result;
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to update vessel schedule {Id}", model.VesselScheduleId);
-                return ServiceResult.Failure("Failed to update schedule. Please try again.");
+                return result.IsSuccess ? ServiceResult.Failure("Failed to update schedule. Please try again.") : result;
             }
+        }
+
+        public async Task<ServiceResult<int>> ConfirmAsync(int id, DateTime reviewedAt, string username, CancellationToken ct = default, bool allowConflicts = false)
+        {
+            var result = ServiceResult<int>.Failure("Failed to confirm schedule. Please try again.");
+            try
+            {
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
+                {
+                    var schedule = await unitOfWork.VesselSchedule.GetForUpdateAsync(id, ct);
+                    if (schedule == null)
+                    {
+                        result = ServiceResult<int>.Failure("Schedule not found.", ServiceResultStatus.NotFound);
+                        return;
+                    }
+                    if (schedule.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
+                    {
+                        result = ServiceResult<int>.Failure("Completed or cancelled schedules cannot be confirmed.", ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    if (schedule.JobOrderId.HasValue)
+                    {
+                        result = ServiceResult<int>.Success(schedule.JobOrderId.Value, "This schedule already has a Job Order.");
+                        return;
+                    }
+                    if (reviewedAt != (schedule.EditedDate ?? schedule.CreatedDate))
+                    {
+                        result = ServiceResult<int>.Failure("The booking changed. Review its current details before confirming.", ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    var error = await ValidateAsync(schedule, allowConflicts, ct, confirming: true);
+                    if (error != null)
+                    {
+                        result = ServiceResult<int>.Failure(error, ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    var created = await jobOrderService.CreateJobOrderAsync(BuildJobOrder(schedule), username, ct);
+                    if (!created.IsSuccess)
+                    {
+                        result = ServiceResult<int>.Failure(created.Message ?? "Job Order creation failed.", created.Status);
+                        throw new InvalidOperationException(result.Message);
+                    }
+                    schedule.JobOrderId = created.Data;
+                    if (schedule.Status != MsapConstants.VesselScheduleStatus.InProgress)
+                    {
+                        schedule.Status = MsapConstants.VesselScheduleStatus.Confirmed;
+                    }
+                    schedule.EditedBy = username;
+                    schedule.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+                    await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username,
+                        $"Confirmed vessel schedule #{id}; linked Job Order #{created.Data}. Overlap override: {allowConflicts}", "Vessel Schedule", id), ct);
+                    await unitOfWork.SaveAsync(ct);
+                    result = ServiceResult<int>.Success(created.Data, "Schedule confirmed and Job Order created successfully.");
+                }, ct);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to confirm vessel schedule {Id}", id);
+                return result.IsSuccess ? ServiceResult<int>.Failure("Failed to confirm schedule. Please try again.") : result;
+            }
+        }
+
+        public async Task<ServiceResult> ChangeStatusAsync(int id, string status, string username, CancellationToken ct = default)
+        {
+            if (status is not (MsapConstants.VesselScheduleStatus.Cancelled or MsapConstants.VesselScheduleStatus.Completed))
+            {
+                return ServiceResult.Failure("Choose Cancel Schedule or Complete Schedule.", ServiceResultStatus.ValidationError);
+            }
+            var result = ServiceResult.Failure("Failed to change schedule status. Please try again.");
+            try
+            {
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
+                {
+                    var schedule = await unitOfWork.VesselSchedule.GetForUpdateAsync(id, ct);
+                    if (schedule == null)
+                    {
+                        result = ServiceResult.Failure("Schedule not found.", ServiceResultStatus.NotFound);
+                        return;
+                    }
+                    if (schedule.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled
+                        || (status == MsapConstants.VesselScheduleStatus.Completed && schedule.JobOrderId == null))
+                    {
+                        result = ServiceResult.Failure("This schedule cannot make that transition.", ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    if (schedule.JobOrderId.HasValue)
+                    {
+                        if (status == MsapConstants.VesselScheduleStatus.Cancelled &&
+                            await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == schedule.JobOrderId.Value, ct) != null)
+                        {
+                            result = ServiceResult.Failure("Dispatch Tickets already exist. Manage cancellation through the linked Job Order.", ServiceResultStatus.ValidationError);
+                            return;
+                        }
+                        result = status == MsapConstants.VesselScheduleStatus.Cancelled
+                            ? await jobOrderService.CancelJobOrderAsync(schedule.JobOrderId.Value, username, ct)
+                            : await jobOrderService.CompleteBookingAsync(schedule.JobOrderId.Value, username, ct);
+                        if (!result.IsSuccess)
+                        {
+                            throw new InvalidOperationException(result.Message);
+                        }
+                        return;
+                    }
+                    schedule.Status = status;
+                    schedule.EditedBy = username;
+                    schedule.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+                    await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Vessel schedule #{id} marked {status}; booking records retained.", "Vessel Schedule", id), ct);
+                    await unitOfWork.SaveAsync(ct);
+                    result = ServiceResult.Success($"Schedule marked {status.ToLowerInvariant()}. Linked operational records were retained.");
+                }, ct);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to change vessel schedule {Id}", id);
+                return result.IsSuccess ? ServiceResult.Failure("Failed to change schedule status. Please try again.") : result;
+            }
+        }
+
+        private static JobOrder BuildJobOrder(VesselSchedule schedule)
+        {
+            var tugs = JsonSerializer.Deserialize<List<int>>(schedule.AssignedTugboatIds ?? "[]") ?? [];
+            return new JobOrder
+            {
+                Date = DateOnly.FromDateTime(schedule.PlannedStart),
+                CustomerId = schedule.CustomerId!.Value,
+                VesselId = schedule.VesselId,
+                PortId = schedule.PortId,
+                TerminalId = schedule.TerminalId,
+                VoyageNumber = schedule.VoyageNumber,
+                PlannedStartTime = schedule.PlannedStart,
+                PlannedEndTime = schedule.PlannedEnd,
+                PreferredTugboatId = tugs.Count > 0 ? tugs[0] : null,
+                RequiredTugCount = Math.Max(tugs.Count, 1),
+                Remarks = schedule.Notes
+            };
         }
 
         public async Task<ServiceResult> DeleteAsync(int id, string username, CancellationToken ct = default)
         {
             try
             {
-                var existing = await unitOfWork.VesselSchedule.GetAsync(s => s.VesselScheduleId == id, ct);
-                if (existing == null)
+                var result = ServiceResult.Failure("Schedule not found.", ServiceResultStatus.NotFound);
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    return ServiceResult.Failure("Schedule not found.", ServiceResultStatus.NotFound);
-                }
-
-                if (existing.Status != MsapConstants.VesselScheduleStatus.Tentative)
-                    return ServiceResult.Failure("Only tentative schedules can be deleted. Cancel an active schedule to retain its history.", ServiceResultStatus.ValidationError);
-                await unitOfWork.VesselSchedule.RemoveAsync(existing, ct);
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Deleted vessel schedule #{id}", "Vessel Schedule", id), ct);
-                await unitOfWork.SaveAsync(ct);
-
-                return ServiceResult.Success("Schedule deleted successfully.");
+                    var existing = await unitOfWork.VesselSchedule.GetForUpdateAsync(id, ct);
+                    if (existing == null)
+                    {
+                        return;
+                    }
+                    if (existing.Status != MsapConstants.VesselScheduleStatus.Tentative || existing.JobOrderId != null)
+                    {
+                        result = ServiceResult.Failure("Only tentative schedules without a Job Order can be deleted. Cancel an active schedule to retain its history.", ServiceResultStatus.ValidationError);
+                        return;
+                    }
+                    await unitOfWork.VesselSchedule.RemoveAsync(existing, ct);
+                    await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Deleted vessel schedule #{id}", "Vessel Schedule", id), ct);
+                    await unitOfWork.SaveAsync(ct);
+                    result = ServiceResult.Success("Schedule deleted successfully.");
+                }, ct);
+                return result;
             }
             catch (Exception ex)
             {
@@ -119,8 +304,12 @@ namespace IBS.Services.MSAP
             return await unitOfWork.VesselSchedule.GetSchedulesWithDetailsAsync(from, to, ct);
         }
 
-        private async Task<string?> ValidateAsync(VesselSchedule model, bool allowConflicts, CancellationToken ct)
+        private async Task<string?> ValidateAsync(VesselSchedule model, bool allowConflicts, CancellationToken ct, bool confirming = false)
         {
+            if (model.CustomerId is not > 0 || await unitOfWork.Customer.GetAsync(c => c.CustomerId == model.CustomerId, ct) == null)
+            {
+                return "Choose a valid customer before saving or confirming the schedule.";
+            }
             if (model.PlannedStart.Year < 1900 || model.PlannedEnd.Year > 9998 || model.PlannedEnd <= model.PlannedStart)
                 return "Use dates between 1900 and 9998, with planned end after planned start.";
             if (model.Status is not (MsapConstants.VesselScheduleStatus.Tentative or MsapConstants.VesselScheduleStatus.Confirmed
@@ -143,10 +332,10 @@ namespace IBS.Services.MSAP
             if (tugs.Count() != tugIds.Count) return "Choose valid tugboats.";
             model.AssignedTugboatIds = tugIds.Count == 0 ? null : JsonSerializer.Serialize(tugIds);
             if (model.Status == MsapConstants.VesselScheduleStatus.Cancelled) return null;
-            if ((model.Status is MsapConstants.VesselScheduleStatus.Confirmed or MsapConstants.VesselScheduleStatus.InProgress)
+            if ((confirming || model.Status is MsapConstants.VesselScheduleStatus.Confirmed or MsapConstants.VesselScheduleStatus.InProgress)
                 && tugIds.Count == 0)
             {
-                return "Assign at least one tugboat before confirming or starting the schedule. Use Tentative while planning.";
+                return "Assign at least one tugboat before confirming the schedule. Use Tentative while planning.";
             }
             var conflicts = await CheckConflictsAsync(model, ct);
             if (conflicts.Count > 0 && !allowConflicts)

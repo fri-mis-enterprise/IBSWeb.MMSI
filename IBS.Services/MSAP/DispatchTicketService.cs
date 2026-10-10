@@ -128,6 +128,13 @@ namespace IBS.Services.MSAP
 
                 await unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    var parent = await unitOfWork.JobOrder.GetForUpdateAsync(model.JobOrderId!.Value, cancellationToken);
+                    var booking = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == model.JobOrderId, cancellationToken);
+                    if (parent?.Status != MsapConstants.JobOrderStatus.Open ||
+                        booking?.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
+                    {
+                        throw new InvalidOperationException("Cannot add a ticket to a closed, cancelled or operationally completed booking.");
+                    }
                     await unitOfWork.DispatchTicket.AddAsync(model, cancellationToken);
                     await unitOfWork.SaveAsync(cancellationToken);
                     await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Create dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
@@ -793,13 +800,26 @@ namespace IBS.Services.MSAP
                     return ServiceResult.Failure("Ticket is not in a deleted state.");
                 }
 
-                model.Status = MsapConstants.DispatchTicketStatus.ForTariff;
+                await unitOfWork.ExecuteInTransactionAsync(async () =>
+                {
+                    if (model.JobOrderId.HasValue)
+                    {
+                        var parent = await unitOfWork.JobOrder.GetForUpdateAsync(model.JobOrderId.Value, cancellationToken);
+                        var booking = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == model.JobOrderId, cancellationToken);
+                        if (parent?.Status != MsapConstants.JobOrderStatus.Open ||
+                            booking?.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
+                        {
+                            throw new InvalidOperationException("Cannot restore a ticket under a closed, cancelled or operationally completed booking.");
+                        }
+                    }
+                    model.Status = MsapConstants.DispatchTicketStatus.ForTariff;
 
-                model.EditedBy = username;
-                model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
+                    model.EditedBy = username;
+                    model.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
 
-                await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Restored dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
-                await unitOfWork.SaveAsync(cancellationToken);
+                    await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Restored dispatch ticket #{model.DispatchNumber}", "Dispatch Ticket", model.DispatchTicketId, model.DispatchNumber), cancellationToken);
+                    await unitOfWork.SaveAsync(cancellationToken);
+                }, cancellationToken);
 
                 return ServiceResult.Success($"Dispatch Ticket #{model.DispatchNumber} restored successfully.");
             }

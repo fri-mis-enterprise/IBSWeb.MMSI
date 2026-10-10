@@ -10,6 +10,12 @@ namespace IBS.Models.MSAP
         [Key]
         public int VesselScheduleId { get; set; }
 
+        [Display(Name = "Customer")]
+        public int? CustomerId { get; set; }
+
+        [ForeignKey(nameof(CustomerId))]
+        public Customer? Customer { get; set; }
+
         [Required]
         public int VesselId { get; set; }
 

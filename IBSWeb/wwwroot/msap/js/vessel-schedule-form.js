@@ -18,7 +18,7 @@
         if (!review.isConfirmed) return;
         const acknowledgement = await ModernAlert.confirm({
             title: 'Save this overlapping plan?',
-            text: 'I acknowledge the overlapping vessel, terminal or tugboat bookings. Save this plan and record my acknowledgement in the audit trail.',
+            text: 'I acknowledge the overlapping vessel, terminal or tugboat bookings. Save this plan with these assignments.',
             icon: 'warning', confirmText: 'Acknowledge and save', cancelText: 'Keep editing'
         });
         if (!acknowledgement.isConfirmed || !ModernFormValidator.validate('scheduleForm')) return;

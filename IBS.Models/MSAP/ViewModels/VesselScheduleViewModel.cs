@@ -7,6 +7,11 @@ namespace IBS.Models.MSAP.ViewModels
     {
         public int VesselScheduleId { get; set; }
 
+        [Required(ErrorMessage = "Please select a customer")]
+        [Range(1, int.MaxValue, ErrorMessage = "Please select a customer")]
+        [Display(Name = "Customer")]
+        public int CustomerId { get; set; }
+
         [Required(ErrorMessage = "Please select a vessel")]
         [Range(1, int.MaxValue, ErrorMessage = "Please select a vessel")]
         [Display(Name = "Vessel")]
@@ -54,20 +59,8 @@ namespace IBS.Models.MSAP.ViewModels
 
         public List<SelectListItem> Tugboats { get; set; } = new();
 
-        public List<SelectListItem> Statuses { get; set; } = new();
+        public List<SelectListItem> Customers { get; set; } = new();
 
         #endregion
-
-        public VesselScheduleViewModel()
-        {
-            Statuses = new List<SelectListItem>
-            {
-                new() { Value = "Tentative", Text = "Tentative" },
-                new() { Value = "Confirmed", Text = "Confirmed" },
-                new() { Value = "In Progress", Text = "In Progress" },
-                new() { Value = "Completed", Text = "Completed" },
-                new() { Value = "Cancelled", Text = "Cancelled" }
-            };
-        }
     }
 }

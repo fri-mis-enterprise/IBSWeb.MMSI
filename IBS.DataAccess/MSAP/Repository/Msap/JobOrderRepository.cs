@@ -53,8 +53,22 @@ namespace IBS.DataAccess.MSAP.Repository.Msap
                 .FirstOrDefaultAsync(j => j.JobOrderId == id, cancellationToken);
         }
 
+        public async Task<JobOrder?> GetForUpdateAsync(int id, CancellationToken ct = default)
+        {
+            var job = await _db.MsapJobOrders
+                .FromSqlInterpolated($"SELECT * FROM msap.mmsi_job_orders WHERE job_order_id = {id} FOR UPDATE")
+                .FirstOrDefaultAsync(ct);
+            if (job != null)
+            {
+                await _db.Entry(job).ReloadAsync(ct);
+            }
+            return job;
+        }
+
         public async Task<string> GenerateJobOrderNumber(CancellationToken cancellationToken)
         {
+            // Direct creation and schedule confirmation share the same number sequence.
+            await _db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(20771001)", cancellationToken);
             var year = DateTime.Now.Year;
             var lastRecord = await _db.MsapJobOrders
                 .Where(j => j.JobOrderNumber.StartsWith($"JO-{year}"))

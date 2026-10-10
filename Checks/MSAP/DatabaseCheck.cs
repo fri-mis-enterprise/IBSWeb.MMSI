@@ -91,7 +91,7 @@ namespace Checks.MSAP
                 var roles = new RoleService(users);
                 var access = new AccessControlService(users, new UserAccessService(dashboardWork, users, roles, NullLogger<UserAccessService>.Instance));
                 var dashboard = new IBSWeb.Areas.MSAP.Controllers.HomeController(users, module, access,
-                    new VesselScheduleService(dashboardWork, NullLogger<VesselScheduleService>.Instance),
+                    new VesselScheduleService(dashboardWork, new JobOrderService(dashboardWork, NullLogger<JobOrderService>.Instance), NullLogger<VesselScheduleService>.Instance),
                     NullLogger<IBSWeb.Areas.MSAP.Controllers.HomeController>.Instance);
                 var identity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "shared-check"), new Claim("Company", "Filpride")], "check");
                 dashboard.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) } };

@@ -200,6 +200,7 @@ namespace IBS.DataAccess.MSAP.Data
 
             builder.Entity<VesselSchedule>(vs =>
             {
+                vs.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
                 vs.HasIndex(x => x.Status);
                 vs.HasIndex(x => x.PlannedStart);
                 vs.HasIndex(x => new { x.PortId, x.TerminalId });

@@ -8,6 +8,8 @@ namespace IBS.Services.MSAP
         Task<ServiceResult<int>> CreateAsync(VesselSchedule model, string username, CancellationToken ct = default, bool allowConflicts = false);
         Task<ServiceResult> UpdateAsync(VesselSchedule model, string username, CancellationToken ct = default, bool allowConflicts = false);
         Task<ServiceResult> DeleteAsync(int id, string username, CancellationToken ct = default);
+        Task<ServiceResult<int>> ConfirmAsync(int id, DateTime reviewedAt, string username, CancellationToken ct = default, bool allowConflicts = false);
+        Task<ServiceResult> ChangeStatusAsync(int id, string status, string username, CancellationToken ct = default);
         Task<VesselSchedule?> GetByIdAsync(int id, CancellationToken ct = default);
         Task<IEnumerable<VesselSchedule>> GetSchedulesAsync(DateTime? from, DateTime? to, CancellationToken ct = default);
         Task<List<ScheduleConflict>> CheckConflictsAsync(VesselSchedule schedule, CancellationToken ct = default,

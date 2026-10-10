@@ -79,7 +79,15 @@
                         <div class="schedule-actions">
                             @if (conflictingIds.Contains(schedule.VesselScheduleId)) { <span class="schedule-conflict-legend"><span class="material-symbols-outlined">warning</span>Overlap</span> }
                             <span class="schedule-status" data-status="@schedule.Status">@schedule.Status</span>
-                            @if (!closed)
+                            @if (!closed && schedule.JobOrderId == null && ViewBag.CanConfirm == true)
+                            {
+                                <a asp-action="Confirm" asp-route-id="@schedule.VesselScheduleId" class="modern-btn-primary">Confirm Schedule</a>
+                            }
+                            @if (schedule.JobOrderId.HasValue)
+                            {
+                                <a asp-controller="JobOrder" asp-action="Details" asp-route-id="@schedule.JobOrderId" class="modern-btn-secondary">@schedule.JobOrder?.JobOrderNumber</a>
+                            }
+                            @if (!closed && ViewBag.CanEdit == true)
                             {
                                 <a asp-action="Edit" asp-route-id="@schedule.VesselScheduleId" class="modern-btn-secondary" aria-label="Edit @schedule.Vessel.VesselName schedule"><span class="material-symbols-outlined">edit</span> Edit</a>
                             }

@@ -156,6 +156,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
             ViewBag.CanDeleteTicket = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.DeleteDispatchTicket);
             ViewBag.CanEditJobOrder = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.EditJobOrder);
             ViewBag.CanCreateDispatchTicket = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.CreateDispatchTicket);
+            ViewBag.VesselSchedule = await unitOfWork.VesselSchedule.GetAsync(s => s.JobOrderId == id, cancellationToken);
 
             foreach (var ticket in jobOrder.DispatchTickets)
             {
@@ -176,6 +177,26 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
         #endregion
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireAccess(ProcedureEnum.EditJobOrder)]
+        public async Task<IActionResult> Cancel(int id, CancellationToken cancellationToken)
+        {
+            var result = await jobOrderService.CancelJobOrderAsync(id, User.Identity?.Name ?? "Unknown", cancellationToken);
+            TempData[result.IsSuccess ? "success" : "error"] = result.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireAccess(ProcedureEnum.EditJobOrder)]
+        public async Task<IActionResult> CompleteBooking(int id, CancellationToken cancellationToken)
+        {
+            var result = await jobOrderService.CompleteBookingAsync(id, User.Identity?.Name ?? "Unknown", cancellationToken);
+            TempData[result.IsSuccess ? "success" : "error"] = result.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         #region Edit
 
         /// <summary>
@@ -193,10 +214,9 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
             ViewData["JobOrderNumber"] = jobOrder.JobOrderNumber;
 
-            // Prevent editing if the Job Order is already Closed.
-            if (jobOrder.Status == MsapConstants.JobOrderStatus.Closed)
+            if (jobOrder.Status != MsapConstants.JobOrderStatus.Open)
             {
-                TempData["error"] = $"Job Order #{jobOrder.JobOrderNumber} is closed and cannot be edited.";
+                TempData["error"] = $"Job Order #{jobOrder.JobOrderNumber} is {jobOrder.Status.ToLowerInvariant()} and cannot be edited.";
                 return RedirectToAction(nameof(Details), new { id });
             }
 

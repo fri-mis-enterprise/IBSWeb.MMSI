@@ -8,6 +8,7 @@ namespace IBS.DataAccess.MSAP.Repository.Msap.IRepository
         Task<IEnumerable<JobOrder>> GetAllJobOrdersWithDetailsAsync(CancellationToken cancellationToken);
         Task<IEnumerable<JobOrder>> GetJobOrdersWithDetailsAsync(DateTime start, DateTime end, CancellationToken cancellationToken);
         Task<JobOrder?> GetJobOrderWithDetailsAsync(int id, CancellationToken cancellationToken);
+        Task<JobOrder?> GetForUpdateAsync(int id, CancellationToken ct = default);
         Task<string> GenerateJobOrderNumber(CancellationToken cancellationToken);
         Task<List<JobOrder>> SearchBillableJobOrdersAsync(string term, int customerId, int limit, CancellationToken cancellationToken);
         Task<(IEnumerable<JobOrder> Data, int RecordsFiltered, int TotalRecords)> GetPagedJobOrdersAsync(DataTablesParameters parameters, CancellationToken cancellationToken);

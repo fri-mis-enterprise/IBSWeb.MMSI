@@ -3,6 +3,8 @@
 @{
     ViewData["Title"] = $"Job Order {Model.JobOrderNumber}";
     ViewData["IsFullWidth"] = true;
+    var booking = ViewBag.VesselSchedule as VesselSchedule;
+    var bookingClosed = booking?.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled;
 }
 
 <div class="modern-layout">
@@ -23,7 +25,7 @@
                 </div>
             </div>
             <div class="flex gap-2" style="flex-wrap: wrap;">
-                @if (ViewBag.CanEditJobOrder == true && Model.Status == MsapConstants.JobOrderStatus.Open && !ViewBag.HasBilling)
+                @if (ViewBag.CanEditJobOrder == true && Model.Status == MsapConstants.JobOrderStatus.Open && !bookingClosed && !ViewBag.HasBilling)
                 {
                     <a asp-action="Edit" asp-route-id="@Model.JobOrderId" class="modern-btn-secondary" data-hotkey="e">
                         <span class="material-symbols-outlined">edit</span> Edit Details
@@ -35,6 +37,45 @@
                 </a>
             </div>
         </div>
+
+        @if (booking != null || (ViewBag.CanEditJobOrder == true && Model.Status == MsapConstants.JobOrderStatus.Open))
+        {
+            <section class="modern-card modern-card-body">
+                <div class="flex-stack">
+                    <div>
+                        <h2 class="modern-headline-md">Vessel booking @(booking != null ? $"· {booking.Status}" : "")</h2>
+                        <p class="modern-body-sm">Operational completion is separate from billing and collection.</p>
+                    </div>
+                    <div class="flex gap-2" style="flex-wrap: wrap;">
+                        @if (booking != null)
+                        {
+                            <a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@booking.VesselScheduleId" class="modern-btn-secondary">View Schedule</a>
+                        }
+                        @if (ViewBag.CanEditJobOrder == true && !bookingClosed && Model.Status != MsapConstants.JobOrderStatus.Cancelled)
+                        {
+                            @if (booking != null && Model.DispatchTickets.Any())
+                            {
+                                <form asp-action="CompleteBooking" method="post" data-booking-action="Complete vessel booking" data-confirm-text="Confirm that all vessel operations are finished and no more Dispatch Tickets are needed. Actual service times must be recorded. Billing and collection can continue.">
+                                    <input type="hidden" name="id" value="@Model.JobOrderId" />
+                                    <button type="submit" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span> Complete Vessel Booking</button>
+                                </form>
+                            }
+                            @if (Model.Status == MsapConstants.JobOrderStatus.Open && !Model.DispatchTickets.Any() && !ViewBag.HasBilling)
+                            {
+                                <form asp-action="Cancel" method="post" data-booking-action="Cancel booking" data-confirm-text="This cancels the Job Order and its linked schedule together. Existing records are retained; the cancelled order cannot accept new tickets.">
+                                    <input type="hidden" name="id" value="@Model.JobOrderId" />
+                                    <button type="submit" class="modern-btn-error"><span class="material-symbols-outlined" aria-hidden="true">event_busy</span> Cancel Booking</button>
+                                </form>
+                            }
+                        }
+                    </div>
+                </div>
+                @if (!bookingClosed && Model.DispatchTickets.Any())
+                {
+                    <p class="modern-body-sm">To cancel, resolve active Dispatch Tickets and billing first. Posted billing follows the reversal workflow.</p>
+                }
+            </section>
+        }
 
         <!-- Main Grid Layout - Now explicitly using Grid classes for side-by-side -->
         <div class="modern-grid">
@@ -117,7 +158,7 @@
                             <span class="material-symbols-outlined text-primary">list_alt</span>
                             <h2 class="modern-headline-md">Dispatch Tickets</h2>
                         </div>
-                        @if (ViewBag.CanCreateDispatchTicket == true && Model.Status == MsapConstants.JobOrderStatus.Open && !ViewBag.HasBilling && Model.DispatchTickets.All(t => t.Status != MsapConstants.DispatchTicketStatus.Billed))
+                        @if (ViewBag.CanCreateDispatchTicket == true && Model.Status == MsapConstants.JobOrderStatus.Open && !bookingClosed && !ViewBag.HasBilling && Model.DispatchTickets.All(t => t.Status != MsapConstants.DispatchTicketStatus.Billed))
                         {
                             <a asp-action="Create" asp-controller="DispatchTicket" asp-route-jobOrderId="@Model.JobOrderId" class="modern-btn-primary text-sm" data-hotkey="a">
                                 <span class="material-symbols-outlined" style="font-size:18px">add_circle</span>
@@ -437,6 +478,21 @@
 
 @section Scripts {
     <script>
+        document.querySelectorAll('[data-booking-action]').forEach(form => {
+            let reviewing = false;
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (reviewing) return;
+                reviewing = true;
+                const result = await ModernAlert.confirm({ title: form.dataset.bookingAction + '?', text: form.dataset.confirmText, icon: 'warning', confirmText: form.dataset.bookingAction });
+                if (result.isConfirmed) {
+                    ModernAlert.showLoading('Updating booking…');
+                    form.submit();
+                } else {
+                    reviewing = false;
+                }
+            });
+        });
         const PageConfig = {
             jobOrderId: @Model.JobOrderId,
             jobOrderNumber: '@Model.JobOrderNumber',

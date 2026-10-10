@@ -22,6 +22,12 @@ namespace IBS.DataAccess.MSAP.Repository
 
         public async Task ExecuteInTransactionAsync(Func<Task> action, CancellationToken cancellationToken = default)
         {
+            if (_db.Database.CurrentTransaction != null)
+            {
+                await action();
+                return;
+            }
+
             var strategy = _db.Database.CreateExecutionStrategy();
 
             await strategy.ExecuteAsync(async () =>
@@ -35,6 +41,7 @@ namespace IBS.DataAccess.MSAP.Repository
                 catch
                 {
                     await transaction.RollbackAsync(cancellationToken);
+                    _db.ChangeTracker.Clear();
                     throw;
                 }
             });

@@ -1,0 +1,350 @@
+using System.Security.Claims;
+using System.Text.Json;
+using IBS.DataAccess.Data;
+using IBS.DataAccess.MSAP.Data;
+using IBS.DataAccess.MSAP.Repository;
+using IBS.Models.MSAP;
+using IBS.Models.MSAP.Enums;
+using IBS.Models.MSAP.MasterFile;
+using IBS.Services.MSAP;
+using IBS.Services.MSAP.AccessControl;
+using IBS.Services.MSAP.Attributes;
+using IBS.Utility.MSAP.Constants;
+using IBS.Utility.MSAP.Helpers;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
+
+namespace Checks.MSAP
+{
+    internal static class SchedulingCheck
+    {
+        public static async Task RunAsync()
+        {
+            foreach (var method in typeof(IBSWeb.Areas.MSAP.Controllers.VesselScheduleController).GetMethods()
+                .Where(m => m.Name is "Confirm" or "Edit" or "Cancel" or "Complete")
+                .Concat(typeof(IBSWeb.Areas.MSAP.Controllers.JobOrderController).GetMethods()
+                    .Where(m => m.Name is "Cancel" or "CompleteBooking")))
+            {
+                var filter = method.GetCustomAttributes(typeof(RequireAccessAttribute), true).Cast<RequireAccessAttribute>().Single();
+                var permission = method.Name == "Confirm" ? ProcedureEnum.CreateJobOrder : ProcedureEnum.EditJobOrder;
+                foreach (bool allowed in new[] { false, true })
+                {
+                    using var provider = new ServiceCollection().AddSingleton<IAccessControlService>(new CheckAccess(allowed ? permission : null)).BuildServiceProvider();
+                    var http = new DefaultHttpContext { RequestServices = provider, User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "check")], "check")) };
+                    http.Request.Headers["X-Requested-With"] = "XMLHttpRequest";
+                    var context = new AuthorizationFilterContext(new ActionContext(http, new RouteData(), new ActionDescriptor()), []);
+                    await filter.OnAuthorizationAsync(context);
+                    Check(allowed ? context.Result == null : context.Result is JsonResult, $"{method.Name} ignored its Job Order permission.");
+                }
+                if (method.IsDefined(typeof(HttpPostAttribute), true))
+                {
+                    Check(method.IsDefined(typeof(ValidateAntiForgeryTokenAttribute), true), $"{method.Name} has no anti-forgery protection.");
+                }
+            }
+            var connection = Environment.GetEnvironmentVariable("MSAP_SCHEDULING_CHECK_CONNECTION")
+                ?? throw new InvalidOperationException("Set MSAP_SCHEDULING_CHECK_CONNECTION to an isolated PostgreSQL server.");
+            var settings = new NpgsqlConnectionStringBuilder(connection) { Database = "postgres", Pooling = false };
+            await using var server = new NpgsqlConnection(settings.ConnectionString);
+            await server.OpenAsync();
+            var database = "msap_schedule_check_" + Guid.NewGuid().ToString("N");
+            await using (var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", server))
+            {
+                await create.ExecuteNonQueryAsync();
+            }
+            try
+            {
+                settings.Database = database;
+                var options = new DbContextOptionsBuilder<MsapDbContext>().UseNpgsql(settings.ConnectionString,
+                    pg => pg.MigrationsHistoryTable("__EFMigrationsHistory", "msap")).Options;
+                await using var db = new MsapDbContext(options);
+                await using var shared = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(settings.ConnectionString).Options);
+                // MSAP notifications reference the shared directory, which these workflow checks do not use.
+                await db.Database.ExecuteSqlRawAsync("CREATE TABLE public.\"AspNetUsers\" (id text PRIMARY KEY)");
+                await db.Database.MigrateAsync();
+                Check(!db.Database.HasPendingModelChanges(), "Scheduling migration does not match the model.");
+                var customer = new Customer { CustomerCode = "SCH01", CustomerName = "Schedule Check", CustomerAddress = "Check Address", CustomerTin = "000-000-000-00000", CustomerTerms = "COD", CustomerType = "Regular", VatType = "Vatable", ZipCode = "1000", Company = "MMSI" };
+                var vessel = new Vessel { VesselNumber = "0001", VesselName = "Check Vessel", VesselType = "LOCAL" };
+                var port = new Port { PortNumber = "001", PortName = "Check Port" };
+                var terminal = new Terminal { TerminalNumber = "001", TerminalName = "Check Terminal", Port = port };
+                var tug = new Tugboat { TugboatNumber = "001", TugboatName = "Check Tug", Port = port, IsCompanyOwned = true };
+                var serviceType = new Service { ServiceNumber = "001", ServiceName = "Check Service" };
+                db.AddRange(customer, vessel, port, terminal, tug, serviceType);
+                await db.SaveChangesAsync();
+                var work = new UnitOfWork(db, shared);
+                var jobs = new JobOrderService(work, NullLogger<JobOrderService>.Instance);
+                var schedules = new VesselScheduleService(work, jobs, NullLogger<VesselScheduleService>.Instance);
+                VesselSchedule Booking(int day) => new()
+                {
+                    CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId,
+                    PlannedStart = new DateTime(2030, 1, day, 8, 0, 0), PlannedEnd = new DateTime(2030, 1, day, 10, 0, 0),
+                    AssignedTugboatIds = JsonSerializer.Serialize(new[] { tug.TugboatId }), VoyageNumber = "CHECK-VOYAGE", Notes = "Planning note"
+                };
+                async Task<VesselSchedule> Reload(int id)
+                {
+                    db.ChangeTracker.Clear();
+                    return await db.MsapVesselSchedules.SingleAsync(s => s.VesselScheduleId == id);
+                }
+                var booking = Booking(1);
+                booking.Status = MsapConstants.VesselScheduleStatus.Confirmed;
+                booking.JobOrderId = 999;
+                var saved = await schedules.CreateAsync(booking, "check");
+                Check(saved.IsSuccess, saved.Message!);
+                booking = await Reload(saved.Data);
+                Check(booking.Status == MsapConstants.VesselScheduleStatus.Tentative && booking.JobOrderId == null && !await db.MsapJobOrders.AnyAsync(), "Saving a schedule bypassed confirmation.");
+                var reviewedAt = booking.CreatedDate;
+                var stale = await schedules.ConfirmAsync(booking.VesselScheduleId, reviewedAt.AddMinutes(-1), "check");
+                Check(!stale.IsSuccess && !await db.MsapJobOrders.AnyAsync(), "A stale booking review created an order.");
+                var closed = new MsapPostedPeriod { Year = 2030, Month = 1, IsClosed = true };
+                db.MsapPostedPeriods.Add(closed);
+                await db.SaveChangesAsync();
+                Check(!(await schedules.ConfirmAsync(booking.VesselScheduleId, reviewedAt, "check")).IsSuccess, "Closed period confirmation succeeded.");
+                booking = await Reload(booking.VesselScheduleId);
+                Check(booking.Status == MsapConstants.VesselScheduleStatus.Tentative && booking.JobOrderId == null && !await db.MsapJobOrders.AnyAsync(), "Failed confirmation did not roll back.");
+                db.Remove(await db.MsapPostedPeriods.SingleAsync());
+                await db.SaveChangesAsync();
+                var overlap = Booking(1);
+                Check((await schedules.CreateAsync(overlap, "check", allowConflicts: true)).IsSuccess, "Could not prepare overlap check.");
+                Check(!(await schedules.ConfirmAsync(booking.VesselScheduleId, reviewedAt, "check")).IsSuccess, "Confirmation ignored overlaps.");
+                Check((await schedules.ChangeStatusAsync(overlap.VesselScheduleId, MsapConstants.VesselScheduleStatus.Cancelled, "check")).IsSuccess, "Cancellation failed.");
+                var confirmed = await schedules.ConfirmAsync(booking.VesselScheduleId, reviewedAt, "check");
+                Check(confirmed.IsSuccess, confirmed.Message!);
+                var order = await db.MsapJobOrders.SingleAsync();
+                Check(order.Status == MsapConstants.JobOrderStatus.Open && order.CustomerId == customer.CustomerId
+                    && order.Date == DateOnly.FromDateTime(booking.PlannedStart) && order.PlannedStartTime == booking.PlannedStart
+                    && order.PlannedEndTime == booking.PlannedEnd && order.PreferredTugboatId == tug.TugboatId && order.VoyageNumber == "CHECK-VOYAGE", "Confirmation did not copy the booking to the Job Order.");
+                Check((await schedules.ConfirmAsync(booking.VesselScheduleId, reviewedAt, "check")).Data == order.JobOrderId
+                    && await db.MsapJobOrders.CountAsync() == 1, "Repeated confirmation created another order.");
+                var ticket = new DispatchTicket
+                {
+                    DispatchNumber = "CHECK-DT", Date = order.Date, JobOrderId = order.JobOrderId, CustomerId = customer.CustomerId,
+                    VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId, TugBoatId = tug.TugboatId,
+                    ServiceId = serviceType.ServiceId, Status = MsapConstants.DispatchTicketStatus.ForTariff, CreatedBy = "check",
+                    DateLeft = order.Date, DateArrived = order.Date, TimeLeft = new TimeOnly(8, 15), TimeArrived = new TimeOnly(9, 15)
+                };
+                db.Add(ticket);
+                await db.SaveChangesAsync();
+                var revision = Booking(2);
+                revision.VesselScheduleId = booking.VesselScheduleId;
+                revision.Status = MsapConstants.VesselScheduleStatus.Cancelled;
+                var updated = await schedules.UpdateAsync(revision, "check");
+                Check(updated.IsSuccess, updated.Message!);
+                booking = await Reload(booking.VesselScheduleId);
+                order = await db.MsapJobOrders.SingleAsync();
+                ticket = await db.MsapDispatchTickets.SingleAsync();
+                Check(booking.Status == MsapConstants.VesselScheduleStatus.Confirmed && order.PlannedStartTime == revision.PlannedStart
+                    && ticket.DateLeft == new DateOnly(2030, 1, 1) && ticket.TimeLeft == new TimeOnly(8, 15), "Revision changed status or replaced actual service times.");
+                ticket.Status = MsapConstants.DispatchTicketStatus.Billed;
+                await db.SaveChangesAsync();
+                Check(!(await schedules.UpdateAsync(revision, "check")).IsSuccess, "Revision bypassed billed-ticket restrictions.");
+                ticket.Status = MsapConstants.DispatchTicketStatus.ForTariff;
+                order.Status = MsapConstants.JobOrderStatus.Closed;
+                await db.SaveChangesAsync();
+                revision.PlannedStart = revision.PlannedStart.AddHours(1);
+                revision.PlannedEnd = revision.PlannedEnd.AddHours(1);
+                Check(!(await schedules.UpdateAsync(revision, "check")).IsSuccess, "Revision bypassed closed Job Order rules.");
+                booking = await Reload(booking.VesselScheduleId);
+                Check(booking.PlannedStart.Hour == 8, "Rejected revision changed the booking.");
+                Check(!(await schedules.ChangeStatusAsync(booking.VesselScheduleId, MsapConstants.VesselScheduleStatus.Cancelled, "check")).IsSuccess, "Schedule cancelled despite existing Dispatch Tickets.");
+                Check(!(await jobs.CancelJobOrderAsync(order.JobOrderId, "check")).IsSuccess, "Job Order cancelled with active tickets.");
+                order = await db.MsapJobOrders.SingleAsync();
+                order.Status = MsapConstants.JobOrderStatus.Open;
+                ticket = await db.MsapDispatchTickets.SingleAsync();
+                ticket.Status = MsapConstants.DispatchTicketStatus.Deleted;
+                await db.SaveChangesAsync();
+                var bill = new Billing
+                {
+                    MsapBillingNumber = "CHECK-B", Date = order.Date, Status = MsapConstants.BillingStatus.ForPosting,
+                    BilledTo = "LOCAL", CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId,
+                    TerminalId = terminal.TerminalId, JobOrderId = order.JobOrderId, CreatedBy = "check"
+                };
+                db.Add(bill);
+                await db.SaveChangesAsync();
+                Check(!(await jobs.CancelJobOrderAsync(order.JobOrderId, "check")).IsSuccess, "Cancellation bypassed unposted billing.");
+                bill.Status = MsapConstants.BillingStatus.ForCollection;
+                await db.SaveChangesAsync();
+                Check(!(await jobs.CancelJobOrderAsync(order.JobOrderId, "check")).IsSuccess, "Cancellation bypassed posted billing.");
+                db.Remove(bill);
+                await db.SaveChangesAsync();
+                Check((await jobs.CancelJobOrderAsync(order.JobOrderId, "check")).IsSuccess, "Resolved booking could not cancel through Job Order.");
+                booking = await Reload(booking.VesselScheduleId);
+                Check(booking.Status == MsapConstants.VesselScheduleStatus.Cancelled
+                    && (await db.MsapJobOrders.SingleAsync()).Status == MsapConstants.JobOrderStatus.Cancelled
+                    && await db.MsapDispatchTickets.CountAsync() == 1, "Cancellation did not synchronize or retain records.");
+                await jobs.TryAutoCloseAsync(order.JobOrderId, "check", default);
+                Check((await db.MsapJobOrders.SingleAsync()).Status == MsapConstants.JobOrderStatus.Cancelled, "Auto-close overwrote cancellation.");
+                var dispatcher = new DispatchTicketService(work, null!, NullLogger<DispatchTicketService>.Instance);
+                Check(!(await dispatcher.RestoreTicketAsync(ticket.DispatchTicketId, "check", default)).IsSuccess, "Cancelled Job Order restored a ticket.");
+                Check(!(await jobs.AssignTugboatAsync(order.JobOrderId, tug.TugboatId, "check", default)).IsSuccess, "Cancelled Job Order accepted a tug.");
+                Check(!(await schedules.DeleteAsync(booking.VesselScheduleId, "check")).IsSuccess, "A linked booking was deleted.");
+
+                var concurrent = Booking(3);
+                Check((await schedules.CreateAsync(concurrent, "check")).IsSuccess, "Could not prepare duplicate-click check.");
+                concurrent = await Reload(concurrent.VesselScheduleId);
+                async Task<ServiceResult<int>> ConfirmInNewContext(int id, DateTime review)
+                {
+                    await using var isolated = new MsapDbContext(options);
+                    var isolatedWork = new UnitOfWork(isolated, shared);
+                    return await new VesselScheduleService(isolatedWork, new JobOrderService(isolatedWork, NullLogger<JobOrderService>.Instance), NullLogger<VesselScheduleService>.Instance)
+                        .ConfirmAsync(id, review, "check");
+                }
+                var duplicates = await Task.WhenAll(ConfirmInNewContext(concurrent.VesselScheduleId, concurrent.CreatedDate), ConfirmInNewContext(concurrent.VesselScheduleId, concurrent.CreatedDate));
+                Check(duplicates.All(r => r.IsSuccess) && duplicates[0].Data == duplicates[1].Data && await db.MsapJobOrders.CountAsync() == 2, "Concurrent confirmation created duplicate orders.");
+                var left = Booking(4);
+                var right = Booking(5);
+                Check((await schedules.CreateAsync(left, "check")).IsSuccess && (await schedules.CreateAsync(right, "check")).IsSuccess, "Could not prepare numbering check.");
+                left = await Reload(left.VesselScheduleId);
+                right = await Reload(right.VesselScheduleId);
+                var parallel = await Task.WhenAll(ConfirmInNewContext(left.VesselScheduleId, left.CreatedDate), ConfirmInNewContext(right.VesselScheduleId, right.CreatedDate));
+                Check(parallel.All(r => r.IsSuccess) && await db.MsapJobOrders.Select(j => j.JobOrderNumber).Distinct().CountAsync() == 4, "Parallel bookings received duplicate Job Order numbers.");
+                var failing = Booking(6);
+                Check((await schedules.CreateAsync(failing, "check")).IsSuccess, "Could not prepare rollback check.");
+                failing = await Reload(failing.VesselScheduleId);
+                var failingService = new VesselScheduleService(work, new FailingJobOrderService(work), NullLogger<VesselScheduleService>.Instance);
+                Check(!(await failingService.ConfirmAsync(failing.VesselScheduleId, failing.CreatedDate, "check")).IsSuccess, "A failed order save reported success.");
+                failing = await Reload(failing.VesselScheduleId);
+                Check(failing.JobOrderId == null && failing.Status == MsapConstants.VesselScheduleStatus.Tentative && await db.MsapJobOrders.CountAsync() == 4, "Job Order / schedule confirmation was not atomic.");
+                var legacy = Booking(7);
+                legacy.CustomerId = null;
+                legacy.CreatedDate = new DateTime(2030, 1, 1);
+                db.Add(legacy);
+                await db.SaveChangesAsync();
+                Check(!(await schedules.ConfirmAsync(legacy.VesselScheduleId, legacy.CreatedDate, "check")).IsSuccess, "A legacy booking confirmed without a customer.");
+                var unassigned = Booking(8);
+                unassigned.AssignedTugboatIds = null;
+                Check((await schedules.CreateAsync(unassigned, "check")).IsSuccess, "Tentative booking required a tug.");
+                unassigned = await Reload(unassigned.VesselScheduleId);
+                Check(!(await schedules.ConfirmAsync(unassigned.VesselScheduleId, unassigned.CreatedDate, "check")).IsSuccess, "Confirmation did not require a tug.");
+                Check(!(await schedules.ChangeStatusAsync(unassigned.VesselScheduleId, MsapConstants.VesselScheduleStatus.Confirmed, "check")).IsSuccess, "Status action bypassed confirmation.");
+                Check(!(await schedules.ChangeStatusAsync(concurrent.VesselScheduleId, MsapConstants.VesselScheduleStatus.Completed, "check")).IsSuccess, "Booking completed without actual tickets.");
+                concurrent = await Reload(concurrent.VesselScheduleId);
+                var past = DateOnly.FromDateTime(DateTimeHelper.GetCurrentPhilippineTime().AddDays(-1));
+                var completedTicket = new DispatchTicket
+                {
+                    DispatchNumber = "DONE-DT", Date = past, JobOrderId = concurrent.JobOrderId,
+                    CustomerId = customer.CustomerId, VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId,
+                    TugBoatId = tug.TugboatId, ServiceId = serviceType.ServiceId, Status = MsapConstants.DispatchTicketStatus.ForTariff,
+                    CreatedBy = "check", DateLeft = past, TimeLeft = new TimeOnly(8, 0), DateArrived = past
+                };
+                db.Add(completedTicket);
+                await db.SaveChangesAsync();
+                Check(!(await jobs.CompleteBookingAsync(concurrent.JobOrderId!.Value, "check")).IsSuccess, "Booking completed without actual end time.");
+                completedTicket.TimeArrived = new TimeOnly(7, 0);
+                await db.SaveChangesAsync();
+                Check(!(await jobs.CompleteBookingAsync(concurrent.JobOrderId.Value, "check")).IsSuccess, "Booking completed with reversed actual times.");
+                completedTicket.TimeArrived = new TimeOnly(9, 0);
+                await db.SaveChangesAsync();
+                Check((await jobs.CompleteBookingAsync(concurrent.JobOrderId.Value, "check")).IsSuccess, "Operational completion failed before tariff/billing.");
+                concurrent = await Reload(concurrent.VesselScheduleId);
+                Check(concurrent.Status == MsapConstants.VesselScheduleStatus.Completed &&
+                    (await db.MsapJobOrders.SingleAsync(j => j.JobOrderId == concurrent.JobOrderId)).Status == MsapConstants.JobOrderStatus.Open,
+                    "Operational completion closed the financial workflow.");
+                Check(!(await dispatcher.CreateDispatchTicketAsync(new IBS.Models.MSAP.ViewModels.DispatchTicketViewModel
+                {
+                    JobOrderId = concurrent.JobOrderId, DispatchNumber = "LATE-DT", Date = past, CustomerId = customer.CustomerId,
+                    VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId, TugBoatId = tug.TugboatId, ServiceId = serviceType.ServiceId
+                }, null, null, "check", default)).IsSuccess, "Completed booking accepted a new ticket.");
+                Check(!(await jobs.CancelJobOrderAsync(concurrent.JobOrderId!.Value, "check")).IsSuccess, "Completed booking was cancelled.");
+                var cancellation = Booking(9);
+                Check((await schedules.CreateAsync(cancellation, "check")).IsSuccess, "Could not prepare linked cancellation.");
+                cancellation = await Reload(cancellation.VesselScheduleId);
+                Check((await schedules.ConfirmAsync(cancellation.VesselScheduleId, cancellation.CreatedDate, "check")).IsSuccess, "Could not confirm cancellation booking.");
+                cancellation = await Reload(cancellation.VesselScheduleId);
+                Check((await schedules.ChangeStatusAsync(cancellation.VesselScheduleId, MsapConstants.VesselScheduleStatus.Cancelled, "check")).IsSuccess, "Confirmed booking without tickets could not cancel.");
+                Check((await db.MsapJobOrders.SingleAsync(j => j.JobOrderId == cancellation.JobOrderId)).Status == MsapConstants.JobOrderStatus.Cancelled,
+                    "Schedule-only cancellation left its Job Order active.");
+                var race = Booking(10);
+                Check((await schedules.CreateAsync(race, "check")).IsSuccess, "Could not prepare booking race.");
+                race = await Reload(race.VesselScheduleId);
+                Check((await schedules.ConfirmAsync(race.VesselScheduleId, race.CreatedDate, "check")).IsSuccess, "Could not confirm booking race.");
+                race = await Reload(race.VesselScheduleId);
+                async Task<bool> RaceAction(bool cancel)
+                {
+                    await using var isolated = new MsapDbContext(options);
+                    var raceWork = new UnitOfWork(isolated, shared);
+                    if (cancel)
+                    {
+                        return (await new JobOrderService(raceWork, NullLogger<JobOrderService>.Instance).CancelJobOrderAsync(race.JobOrderId!.Value, "check")).IsSuccess;
+                    }
+                    var raceDispatch = new DispatchTicketService(raceWork, null!, NullLogger<DispatchTicketService>.Instance);
+                    return (await raceDispatch.CreateDispatchTicketAsync(new IBS.Models.MSAP.ViewModels.DispatchTicketViewModel
+                    {
+                        JobOrderId = race.JobOrderId, DispatchNumber = "RACE-DT", Date = past, CustomerId = customer.CustomerId,
+                        VesselId = vessel.VesselId, PortId = port.PortId, TerminalId = terminal.TerminalId, TugBoatId = tug.TugboatId, ServiceId = serviceType.ServiceId
+                    }, null, null, "check", default)).IsSuccess;
+                }
+                var raceResults = await Task.WhenAll(RaceAction(true), RaceAction(false));
+                Check(raceResults.Count(success => success) == 1, "Cancellation and ticket creation both succeeded, or neither succeeded.");
+                race = await Reload(race.VesselScheduleId);
+                if (raceResults[0])
+                {
+                    Check(race.Status == MsapConstants.VesselScheduleStatus.Cancelled &&
+                        !await db.MsapDispatchTickets.AnyAsync(t => t.JobOrderId == race.JobOrderId), "Cancelled order accepted a racing ticket.");
+                }
+                else
+                {
+                    Check(race.Status == MsapConstants.VesselScheduleStatus.Confirmed &&
+                        (await db.MsapJobOrders.SingleAsync(j => j.JobOrderId == race.JobOrderId)).Status == MsapConstants.JobOrderStatus.Open,
+                        "Ticket creation left a cancelled parent.");
+                }
+                var completedRevision = Booking(3);
+                completedRevision.VesselScheduleId = concurrent.VesselScheduleId;
+                Check(!(await schedules.UpdateAsync(completedRevision, "check")).IsSuccess, "Completed booking remained editable.");
+                Console.WriteLine("PASS: scheduling migration, tentative-only save, booking review, customer/tug/period/overlap guards, linked order, revisions, actual times, synchronized cancellation, billing guards, operational completion, duplicate clicks, concurrent numbering/cancellation and atomic rollback.");
+            }
+            finally
+            {
+                await using var drop = new NpgsqlCommand($"DROP DATABASE \"{database}\" WITH (FORCE)", server);
+                await drop.ExecuteNonQueryAsync();
+            }
+        }
+
+        private static void Check(bool passed, string message)
+        {
+            if (!passed)
+            {
+                throw new InvalidOperationException(message);
+            }
+        }
+
+        private sealed class FailingJobOrderService : JobOrderService
+        {
+            public FailingJobOrderService(UnitOfWork work) : base(work, NullLogger<JobOrderService>.Instance)
+            {
+            }
+
+            public override async Task<ServiceResult<int>> CreateJobOrderAsync(JobOrder job, string username, CancellationToken ct)
+            {
+                var created = await base.CreateJobOrderAsync(job, username, ct);
+                Check(created.IsSuccess, created.Message!);
+                return ServiceResult<int>.Failure("Injected failure after saving the order.");
+            }
+        }
+
+        private sealed class CheckAccess : IAccessControlService
+        {
+            private readonly ProcedureEnum? _allowed;
+
+            public CheckAccess(ProcedureEnum? allowed)
+            {
+                _allowed = allowed;
+            }
+
+            public Task<bool> HasAccessAsync(string userId, params ProcedureEnum[] procedures)
+            {
+                return Task.FromResult(_allowed.HasValue && procedures.Contains(_allowed.Value));
+            }
+
+            public Task<bool> HasAnyAccessAsync(string userId, params ProcedureEnum[] procedures)
+            {
+                return HasAccessAsync(userId, procedures);
+            }
+        }
+    }
+}

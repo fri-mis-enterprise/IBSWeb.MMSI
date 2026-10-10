@@ -1,8 +1,12 @@
+using System.Security.Claims;
 using System.Text.Json;
 using IBS.DataAccess.MSAP.Repository.IRepository;
 using IBS.Models.MSAP;
+using IBS.Models.MSAP.Enums;
 using IBS.Models.MSAP.ViewModels;
 using IBS.Services.MSAP;
+using IBS.Services.MSAP.AccessControl;
+using IBS.Services.MSAP.Attributes;
 using IBS.Utility.MSAP.Constants;
 using IBS.Utility.MSAP.Helpers;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +19,8 @@ namespace IBSWeb.Areas.MSAP.Controllers
     [Authorize]
     public class VesselScheduleController(
         IUnitOfWork unitOfWork,
-        IVesselScheduleService scheduleService) : Controller
+        IVesselScheduleService scheduleService,
+        IAccessControlService accessControl) : Controller
     {
         [HttpGet]
         public async Task<IActionResult> Index(DateTime? month, CancellationToken ct)
@@ -62,6 +67,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
                 Tugboats = tugboats.OrderBy(t => t.TugboatName).ToList()
             };
             await MarkConflictsAsync(board, day, day.AddDays(1), ct);
+            await SetActionPermissionsAsync();
             return View(board);
         }
 
@@ -92,7 +98,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
                 if (result.IsSuccess)
                 {
                     TempData["success"] = "Schedule created successfully.";
-                    return RedirectToAction(nameof(Day), new { date = vm.PlannedStart.ToString("yyyy-MM-dd") });
+                    return RedirectToAction(nameof(Details), new { id = result.Data });
                 }
 
                 ModelState.AddModelError("", result.Message ?? "Failed to create schedule.");
@@ -103,6 +109,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
         }
 
         [HttpGet]
+        [RequireAccess(ProcedureEnum.EditJobOrder)]
         public async Task<IActionResult> Edit(int id, CancellationToken ct)
         {
             var entity = await scheduleService.GetByIdAsync(id, ct);
@@ -123,6 +130,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [RequireAccess(ProcedureEnum.EditJobOrder)]
         public async Task<IActionResult> Edit(VesselScheduleViewModel vm, CancellationToken ct)
         {
             if (ModelState.IsValid)
@@ -135,12 +143,14 @@ namespace IBSWeb.Areas.MSAP.Controllers
                 if (result.IsSuccess)
                 {
                     TempData["success"] = "Schedule updated successfully.";
-                    return RedirectToAction(nameof(Day), new { date = vm.PlannedStart.ToString("yyyy-MM-dd") });
+                    return RedirectToAction(nameof(Details), new { id = vm.VesselScheduleId });
                 }
 
                 ModelState.AddModelError("", result.Message ?? "Failed to update schedule.");
             }
 
+            vm.Status = (await scheduleService.GetByIdAsync(vm.VesselScheduleId, ct))?.Status ?? MsapConstants.VesselScheduleStatus.Tentative;
+            ModelState.Remove(nameof(vm.Status));
             await PopulateDropdownsAsync(vm, ct);
             return View(vm);
         }
@@ -148,11 +158,95 @@ namespace IBSWeb.Areas.MSAP.Controllers
         [HttpGet]
         public async Task<IActionResult> Details(int id, CancellationToken ct)
         {
+            var schedule = await LoadDetailsAsync(id, ct);
+            if (schedule == null)
+            {
+                return NotFound();
+            }
+            await SetActionPermissionsAsync();
+            ViewBag.HasDispatchTickets = schedule.JobOrderId.HasValue &&
+                await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == schedule.JobOrderId.Value, ct) != null;
+            return View(schedule);
+        }
+
+        private async Task SetActionPermissionsAsync()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            ViewBag.CanConfirm = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.CreateJobOrder);
+            ViewBag.CanEdit = userId != null && await accessControl.HasAccessAsync(userId, ProcedureEnum.EditJobOrder);
+        }
+
+        [HttpGet]
+        [RequireAccess(ProcedureEnum.CreateJobOrder)]
+        public async Task<IActionResult> Confirm(int id, CancellationToken ct)
+        {
+            var schedule = await LoadDetailsAsync(id, ct);
+            if (schedule == null)
+            {
+                return NotFound();
+            }
+            if (schedule.JobOrderId.HasValue || schedule.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
+            {
+                return RedirectToAction(nameof(Details), new { id });
+            }
+            await SetActionPermissionsAsync();
+            return View(schedule);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireAccess(ProcedureEnum.CreateJobOrder)]
+        public async Task<IActionResult> Confirm(int id, DateTime reviewedAt, bool allowConflicts, CancellationToken ct)
+        {
+            if (ModelState.IsValid)
+            {
+                var result = await scheduleService.ConfirmAsync(id, reviewedAt, User.Identity?.Name ?? "system", ct, allowConflicts);
+                if (result.IsSuccess)
+                {
+                    TempData["success"] = result.Message;
+                    return RedirectToAction("Details", "JobOrder", new { id = result.Data });
+                }
+                ModelState.AddModelError("", result.Message ?? "Failed to confirm schedule.");
+            }
+            var schedule = await LoadDetailsAsync(id, ct);
+            if (schedule == null)
+            {
+                return NotFound();
+            }
+            await SetActionPermissionsAsync();
+            return View(schedule);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireAccess(ProcedureEnum.EditJobOrder)]
+        public async Task<IActionResult> Cancel(int id, CancellationToken ct)
+        {
+            return await ChangeStatusAsync(id, MsapConstants.VesselScheduleStatus.Cancelled, ct);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequireAccess(ProcedureEnum.EditJobOrder)]
+        public async Task<IActionResult> Complete(int id, CancellationToken ct)
+        {
+            return await ChangeStatusAsync(id, MsapConstants.VesselScheduleStatus.Completed, ct);
+        }
+
+        private async Task<IActionResult> ChangeStatusAsync(int id, string status, CancellationToken ct)
+        {
+            var result = await scheduleService.ChangeStatusAsync(id, status, User.Identity?.Name ?? "system", ct);
+            TempData[result.IsSuccess ? "success" : "error"] = result.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        private async Task<VesselSchedule?> LoadDetailsAsync(int id, CancellationToken ct)
+        {
             var entity = await unitOfWork.VesselSchedule.GetAsync(
                 s => s.VesselScheduleId == id, ct);
             if (entity == null)
             {
-                return NotFound();
+                return null;
             }
 
             var schedule = (await scheduleService.GetSchedulesAsync(entity.PlannedStart, entity.PlannedEnd, ct))
@@ -162,7 +256,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
             ViewBag.AssignedTugboats = (await unitOfWork.Tugboat.GetAllAsync(t => tugIds.Contains(t.TugboatId), ct))
                 .OrderBy(t => t.TugboatName).Select(t => t.TugboatName).ToList();
 
-            return View(schedule);
+            return schedule;
         }
 
         [HttpPost]
@@ -251,6 +345,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
         private async Task PopulateDropdownsAsync(VesselScheduleViewModel vm, CancellationToken ct, int? selectedPortId = null)
         {
+            vm.Customers = await unitOfWork.GetCustomerListAsyncById(ct);
             vm.Vessels = (await unitOfWork.Vessel.GetAllAsync(null, ct))
                 .OrderBy(v => v.VesselName)
                 .Select(v => new SelectListItem { Value = v.VesselId.ToString(), Text = $"{v.VesselName} ({v.VesselNumber})" })
@@ -278,6 +373,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
         {
             return new VesselSchedule
             {
+                CustomerId = vm.CustomerId,
                 VesselId = vm.VesselId,
                 PortId = vm.PortId,
                 TerminalId = vm.TerminalId,
@@ -287,7 +383,6 @@ namespace IBSWeb.Areas.MSAP.Controllers
                     ? JsonSerializer.Serialize(vm.SelectedTugboatIds)
                     : null,
                 VoyageNumber = vm.VoyageNumber,
-                Status = vm.Status,
                 Notes = vm.Notes
             };
         }
@@ -301,6 +396,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
             return new VesselScheduleViewModel
             {
                 VesselScheduleId = entity.VesselScheduleId,
+                CustomerId = entity.CustomerId ?? 0,
                 VesselId = entity.VesselId,
                 PortId = entity.PortId,
                 TerminalId = entity.TerminalId,

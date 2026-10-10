@@ -105,6 +105,30 @@ Check(links.GetPathByAction("Index", "Home", new { area = "MSAP" })?.StartsWith(
 Check(links.GetPathByAction("GetTimeline", "AuditTrail", new { area = "MSAP", id = 1 }) == "/MSAP/AuditTrail/GetTimeline/1", "MSAP audit link is wrong.");
 Check(links.GetPathByAction("Index", "Home", new { area = "User" }) != null, "Base dashboard route is missing.");
 var engine = services.GetRequiredService<IRazorViewEngine>();
+var progressView = engine.GetView(null, "/Areas/MSAP/Views/VesselSchedule/_ScheduleProgress.cshtml", false);
+Check(progressView.Success, "Schedule progress partial is missing.");
+foreach (var status in new[] { "Tentative", "Confirmed", "In Progress", "Completed", "Cancelled" })
+{
+    var http = new DefaultHttpContext { RequestServices = services };
+    var actionContext = new ActionContext(http, new RouteData(), moduleActions.First());
+    var viewData = new ViewDataDictionary<string>(services.GetRequiredService<Microsoft.AspNetCore.Mvc.ModelBinding.IModelMetadataProvider>(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary()) { Model = status };
+    using var output = new StringWriter();
+    var viewContext = new ViewContext(actionContext, progressView.View!, viewData,
+        services.GetRequiredService<ITempDataDictionaryFactory>().GetTempData(http), output, new HtmlHelperOptions());
+    await progressView.View!.RenderAsync(viewContext);
+    var html = output.ToString();
+    if (status == "Cancelled")
+    {
+        Check(html.Contains("Booking cancelled", StringComparison.Ordinal) && !html.Contains("schedule-progress-step", StringComparison.Ordinal), "Cancelled schedule implies completed stages.");
+    }
+    else
+    {
+        Check(Regex.Matches(html, "aria-current=\"step\"").Count == 1, $"Schedule {status} must have one current stage.");
+        Check(html.Contains($"<strong>{status}</strong>", StringComparison.Ordinal), $"Schedule {status} stage is missing.");
+        Check(Regex.Matches(html, "class=\"schedule-progress-step\"").Count == (status == "In Progress" ? 4 : 3), "Schedule progress adds an operation step to the normal flow.");
+    }
+}
+Console.WriteLine("PASS: schedule progress renders all statuses, one current stage and a separate cancelled state.");
 foreach (var area in new[] { "MSAP", "MSAPAdmin", "MSAPSuperAdmin" })
 {
     foreach (var view in Directory.EnumerateFiles(Path.Combine(webRoot, "Areas", area), "*.cshtml", SearchOption.AllDirectories))
@@ -193,4 +217,8 @@ Console.WriteLine("PASS: unsafe storage paths rejected for upload, URL, download
 if (args.Contains("--database", StringComparer.Ordinal))
 {
     await Checks.MSAP.DatabaseCheck.RunAsync(storage, services.GetRequiredService<ITempDataDictionaryFactory>());
+}
+if (args.Contains("--scheduling-database", StringComparer.Ordinal))
+{
+    await Checks.MSAP.SchedulingCheck.RunAsync();
 }

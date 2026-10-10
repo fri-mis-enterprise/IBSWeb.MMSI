@@ -1,0 +1,98 @@
+@model VesselSchedule
+@{
+    ViewData["Title"] = "Confirm Schedule";
+    ViewData["IsFullWidth"] = true;
+    var tugs = (List<string>)ViewBag.AssignedTugboats;
+    var canConfirm = Model.CustomerId is > 0 && tugs.Count > 0 && Model.JobOrderId == null
+        && Model.Status is not (MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled);
+}
+<link rel="stylesheet" href="~/msap/css/vessel-schedule.css" asp-append-version="true" />
+<div class="modern-layout">
+    <main class="modern-container schedule-workspace">
+        <div class="flex-stack">
+            <div><span class="modern-label">Vessel Schedule · #@Model.VesselScheduleId</span><h1 class="modern-headline-lg">Confirm Schedule</h1>
+                <p class="schedule-muted">Review this booking before creating its Job Order. All times are Philippine time.</p></div>
+            <a asp-action="Details" asp-route-id="@Model.VesselScheduleId" class="modern-btn-secondary">Back to schedule</a>
+        </div>
+        <div class="modern-card schedule-record">
+            <h2>Booking review</h2>
+            <dl id="bookingReview">
+                <dt>Customer</dt><dd>@(Model.Customer?.CustomerName ?? "Not selected")</dd>
+                <dt>Vessel</dt><dd>@Model.Vessel.VesselName</dd>
+                <dt>Location</dt><dd>@Model.Port.PortName / @Model.Terminal.TerminalName</dd>
+                <dt>Voyage</dt><dd>@(Model.VoyageNumber ?? "—")</dd>
+                <dt>Planned start / Job Order date</dt><dd>@Model.PlannedStart.ToString("MMM d, yyyy · HH:mm")</dd>
+                <dt>Planned end</dt><dd>@Model.PlannedEnd.ToString("MMM d, yyyy · HH:mm")</dd>
+                <dt>Assigned tugs</dt><dd>@(tugs.Count == 0 ? "Not assigned" : string.Join(", ", tugs))</dd>
+            </dl>
+            <p class="schedule-muted">Confirmation creates one Open Job Order and links it to this booking. Planned dates remain separate from actual service times recorded in Dispatch Tickets.</p>
+            <form asp-action="Confirm" method="post" id="confirmSchedule">
+                <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                <input type="hidden" name="reviewedAt" value="@((Model.EditedDate ?? Model.CreatedDate).ToString("O"))" />
+                <input type="hidden" name="allowConflicts" id="confirmAllowConflicts" value="false" />
+                <div id="confirmationErrors" asp-validation-summary="All" class="text-error" role="alert"></div>
+                <div id="conflictErrors" hidden>
+                    @foreach (var error in ViewData.ModelState.Values.SelectMany(state => state.Errors).Where(error => error.ErrorMessage.StartsWith("Overlapping plans:", StringComparison.Ordinal)))
+                    {
+                        <span>@error.ErrorMessage</span>
+                    }
+                </div>
+                @if (canConfirm)
+                {
+                    <button type="submit" class="modern-btn-primary"><span class="material-symbols-outlined">check_circle</span> Confirm &amp; Create Job Order</button>
+                }
+                else
+                {
+                    <p class="text-error">Select a customer and assign at least one tugboat before confirmation. Completed, cancelled or already-linked bookings cannot be confirmed here.</p>
+                    @if (ViewBag.CanEdit == true && Model.JobOrderId == null && Model.Status is not (MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled))
+                    {
+                        <a asp-action="Edit" asp-route-id="@Model.VesselScheduleId" class="modern-btn-secondary">Revise Schedule</a>
+                    }
+                }
+            </form>
+        </div>
+    </main>
+</div>
+@section Scripts {
+    <script>
+        (() => {
+            const form = document.getElementById('confirmSchedule');
+            let reviewing = false;
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (reviewing) return;
+                reviewing = true;
+                const result = await ModernAlert.confirm({
+                    title: 'Confirm this booking?',
+                    text: 'Create its linked Job Order using the customer, planned dates and tug assignments shown above?',
+                    icon: 'question', confirmText: 'Confirm & Create Job Order', cancelText: 'Keep reviewing'
+                });
+                if (result.isConfirmed) {
+                    ModernAlert.showLoading('Confirming schedule…');
+                    form.submit();
+                } else {
+                    reviewing = false;
+                }
+            });
+            const conflicts = [...document.querySelectorAll('#conflictErrors span')];
+            if (!conflicts.length) return;
+            reviewing = true;
+            (async () => {
+                const text = conflicts.map(error => $('<div>').text(error.textContent).html()).join('<br><br>');
+                const review = await ModernAlert.confirm({ title: 'Review schedule conflicts', text, icon: 'warning', confirmText: 'Continue to final confirmation', cancelText: 'Keep reviewing' });
+                if (!review.isConfirmed) {
+                    reviewing = false;
+                    return;
+                }
+                const final = await ModernAlert.confirm({ title: 'Confirm this overlapping booking?', text: 'I acknowledge the overlapping vessel, terminal or tugboat bookings. Confirm this schedule and create its Job Order.', icon: 'warning', confirmText: 'Acknowledge & Create Job Order', cancelText: 'Keep reviewing' });
+                if (!final.isConfirmed) {
+                    reviewing = false;
+                    return;
+                }
+                document.getElementById('confirmAllowConflicts').value = 'true';
+                ModernAlert.showLoading('Confirming acknowledged schedule…');
+                form.submit();
+            })();
+        })();
+    </script>
+}
