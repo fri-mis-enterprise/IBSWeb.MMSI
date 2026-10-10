@@ -1,0 +1,169 @@
+@model VesselSchedule
+@{
+    ViewData["Title"] = "Schedule Details";
+    ViewData["IsFullWidth"] = true;
+    var closed = Model.Status is MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled;
+    var tugs = (List<string>)ViewBag.AssignedTugboats;
+}
+<link rel="stylesheet" href="~/msap/css/vessel-schedule.css" asp-append-version="true" />
+<div class="modern-layout">
+    <main class="modern-container schedule-workspace schedule-details-workspace">
+        <header class="schedule-details-heading">
+            <div class="schedule-details-identity">
+                <span class="modern-label">Vessel Schedule #@Model.VesselScheduleId</span>
+                <h1 class="modern-headline-md">@Model.Vessel.VesselName</h1>
+                <span class="modern-badge-sm">@MsapConstants.VesselScheduleStatus.GetDisplayName(Model.Status)</span>
+                @if (Model.JobOrderId.HasValue)
+                {
+                    <a asp-controller="JobOrder" asp-action="Details" asp-route-id="@Model.JobOrderId" class="schedule-progress-order">@Model.JobOrder?.JobOrderNumber</a>
+                }
+            </div>
+            <a asp-action="Day" asp-route-date="@Model.PlannedStart.ToString("yyyy-MM-dd")" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">arrow_back</span> Daily schedules</a>
+        </header>
+        <partial name="_JobProgress" model="(JobProgressViewModel)ViewBag.JobProgress" />
+        <div class="schedule-details-layout">
+            <section class="modern-card schedule-booking" aria-labelledby="bookingDetailsTitle">
+                <div class="schedule-booking-heading">
+                    <span class="material-symbols-outlined" aria-hidden="true">directions_boat</span>
+                    <h2 id="bookingDetailsTitle">Booking details</h2>
+                    @if (closed)
+                    {
+                        <span class="schedule-readonly"><span class="material-symbols-outlined" aria-hidden="true">lock</span> Read-only</span>
+                    }
+                </div>
+                <div class="schedule-booking-body">
+                    <dl class="schedule-booking-fields">
+                        <div class="schedule-booking-wide"><dt>Customer</dt><dd>@(Model.Customer?.CustomerName ?? "Select a customer before confirmation")</dd></div>
+                        <div><dt>Port</dt><dd>@Model.Port.PortName</dd></div>
+                        <div><dt>Terminal</dt><dd>@Model.Terminal.TerminalName</dd></div>
+                        <div><dt>Voyage number</dt><dd>@(Model.VoyageNumber ?? "—")</dd></div>
+                        <div><dt>Vessel type</dt><dd>@(Model.VesselType ?? "—")</dd></div>
+                    </dl>
+                    <section class="schedule-planned-window" aria-labelledby="plannedWindowTitle">
+                        <h3 id="plannedWindowTitle"><span class="material-symbols-outlined" aria-hidden="true">schedule</span> Planned service window</h3>
+                        <dl>
+                            <div><dt>Start</dt><dd><strong>@Model.PlannedStart.ToString("HH:mm")</strong><span>@Model.PlannedStart.ToString("MMM d, yyyy")</span></dd></div>
+                            <div><dt>End</dt><dd><strong>@Model.PlannedEnd.ToString("HH:mm")</strong><span>@Model.PlannedEnd.ToString("MMM d, yyyy")</span></dd></div>
+                            <div><dt>Duration</dt><dd><strong>@((Model.PlannedEnd - Model.PlannedStart).TotalHours.ToString("0.##")) <small>hours</small></strong><span>Philippine time</span></dd></div>
+                        </dl>
+                    </section>
+                    <section class="schedule-booking-tugs" aria-labelledby="assignedTugsTitle">
+                        <div class="schedule-toolbar"><h3 id="assignedTugsTitle">Assigned tugboats</h3><span class="schedule-assigned-count">@tugs.Count assigned</span></div>
+                        @if (tugs.Count == 0)
+                        {
+                            <p class="schedule-muted">No tugboats assigned yet.</p>
+                        }
+                        else
+                        {
+                            <ul class="schedule-booking-chips" aria-label="Assigned tugboats">
+                                @foreach (var tug in tugs)
+                                {
+                                    <li><span class="material-symbols-outlined" aria-hidden="true">directions_boat</span> @tug</li>
+                                }
+                            </ul>
+                        }
+                    </section>
+                    @if (!string.IsNullOrWhiteSpace(Model.Notes))
+                    {
+                        <section class="schedule-booking-notes" aria-labelledby="bookingNotesTitle"><h3 id="bookingNotesTitle">Planning notes</h3><p class="schedule-note">@Model.Notes</p></section>
+                    }
+                </div>
+                <div class="schedule-booking-footer">
+                    <span>Created @Model.CreatedDate.ToString("MMM d, yyyy · HH:mm") by @Model.CreatedBy</span>
+                    @if (Model.EditedDate.HasValue)
+                    {
+                        <span>Updated @Model.EditedDate.Value.ToString("MMM d, yyyy · HH:mm") by @Model.EditedBy</span>
+                    }
+                </div>
+            </section>
+            <aside class="modern-card schedule-booking-actions" aria-labelledby="bookingActionsTitle">
+                <div class="schedule-booking-heading"><span class="material-symbols-outlined" aria-hidden="true">touch_app</span><h2 id="bookingActionsTitle">Booking actions</h2></div>
+                @if (!closed && ViewBag.CanEdit == true && ViewBag.CanComplete == true)
+                {
+                    <div class="schedule-booking-body schedule-action-item">
+                        <h3>Finish vessel service</h3>
+                        <p class="schedule-muted">All recorded services have actual end times. Complete service when no more Dispatch Tickets are expected. Billing and collection continue separately.</p>
+                        <form asp-action="Complete" method="post" data-schedule-action="Complete">
+                            <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                            <button type="submit" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span> Complete Service</button>
+                        </form>
+                    </div>
+                }
+                <details class="schedule-booking-body">
+                    <summary>Show other actions</summary>
+                    @if (!closed && ViewBag.CanEdit == true)
+                    {
+                        @if (ViewBag.CanRevise == true)
+                        {
+                            <div class="schedule-action-item">
+                                <h3>Adjust the booking</h3><p class="schedule-muted">Adding tugboats only keeps the booking confirmed and retains its Job Order. Other booking changes return it to Tentative and retain the old unused Job Order as Invalidated.</p>
+                                <a asp-action="Edit" asp-route-id="@Model.VesselScheduleId" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span> Revise Schedule</a>
+                            </div>
+                        }
+                        <div class="schedule-action-item schedule-action-cancel">
+                            @if (ViewBag.CanCancel != true)
+                            {
+                                <h3>Cancellation unavailable</h3><p class="schedule-muted">Resolve active Dispatch Tickets and billing before cancelling this schedule.</p>
+                            }
+                            else
+                            {
+                                <h3>Cancel this booking</h3><p class="schedule-muted">@(Model.JobOrderId.HasValue ? "Cancels the schedule and its Job Order together. Records are retained." : "Release the tug bookings and keep this plan on record.")</p>
+                                <form asp-action="Cancel" method="post" data-schedule-action="Cancel">
+                                    <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                                    <button type="submit" class="modern-btn-error"><span class="material-symbols-outlined" aria-hidden="true">event_busy</span> Cancel Booking</button>
+                                </form>
+                            }
+                        </div>
+                    }
+                    @if (closed)
+                    {
+                        <p class="schedule-muted">@(Model.Status == MsapConstants.VesselScheduleStatus.Completed ? "Service is completed. Tariff, approval, billing, posting and collection can continue." : "This booking is cancelled. Schedule changes are no longer available.")</p>
+                    }
+                    @if (Model.Status == MsapConstants.VesselScheduleStatus.Tentative && Model.JobOrderId == null)
+                    {
+                        <details class="schedule-delete-option">
+                            <summary>Created by mistake?</summary>
+                            <p class="schedule-muted">Delete this tentative plan permanently, or cancel it to keep the record.</p>
+                            <form asp-action="Delete" method="post" id="deleteSchedule">
+                                <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                                <button type="button" id="deleteScheduleButton" class="modern-btn-error"><span class="material-symbols-outlined" aria-hidden="true">delete</span> Delete tentative schedule</button>
+                            </form>
+                        </details>
+                    }
+                </details>
+            </aside>
+        </div>
+    </main>
+</div>
+@section Scripts {
+    <script src="~/msap/js/schedule-confirmation.js" asp-append-version="true"></script>
+    <script>
+        document.querySelectorAll('[data-schedule-action]').forEach(form => {
+            let reviewing = false;
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (reviewing) return;
+                reviewing = true;
+                const action = form.dataset.scheduleAction;
+                const completing = action === 'Complete';
+                const result = await ModernAlert.confirm({
+                    title: completing ? 'Complete vessel service?' : 'Cancel schedule?',
+                    text: completing ? 'Confirm that all services are finished and no more Dispatch Tickets are expected. New tickets will be blocked. Tariff, approval, billing, posting and collection will continue.' : 'This cancels the schedule and any linked Job Order together. The booking becomes read-only and records are retained.',
+                    icon: 'warning',
+                    confirmText: completing ? 'Complete Service' : 'Cancel Schedule'
+                });
+                if (result.isConfirmed) {
+                    ModernAlert.showLoading('Updating schedule…');
+                    form.submit();
+                } else {
+                    reviewing = false;
+                }
+            });
+        });
+        document.getElementById('deleteScheduleButton')?.addEventListener('click', function () {
+            const form = document.getElementById('deleteSchedule');
+            ModernAlert.confirm({ title: 'Delete tentative schedule?', text: 'This removes the plan permanently.', icon: 'warning', confirmText: 'Delete schedule' })
+                .then(result => { if (result.isConfirmed) form.submit(); });
+        });
+    </script>
+}

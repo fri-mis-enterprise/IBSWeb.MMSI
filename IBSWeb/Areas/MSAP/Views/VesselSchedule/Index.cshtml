@@ -1,0 +1,91 @@
+@model VesselScheduleBoardViewModel
+@{
+    ViewData["Title"] = "Vessel Schedule";
+    ViewData["IsFullWidth"] = true;
+    var month = Model.Date;
+    var today = DateTimeHelper.GetCurrentPhilippineTime().Date;
+    var gridStart = month.AddDays(-(int)month.DayOfWeek);
+    var cellCount = ((int)month.DayOfWeek + DateTime.DaysInMonth(month.Year, month.Month) + 6) / 7 * 7;
+    var monthSchedules = Model.Schedules.Where(s => s.PlannedStart < month.AddMonths(1) && s.PlannedEnd > month).ToList();
+}
+<link rel="stylesheet" href="~/msap/css/vessel-schedule.css" asp-append-version="true" />
+<div class="modern-layout">
+    <main class="modern-container schedule-workspace">
+        <div class="flex-stack">
+            <div>
+                <span class="modern-label">Operations planning</span>
+                <h1 class="modern-headline-lg">Vessel Schedule</h1>
+                <p class="schedule-muted">Plan vessel schedules and tugboat assignments. All times are Philippine time.</p>
+            </div>
+            <a asp-action="Create" asp-route-date="@today.ToString("yyyy-MM-dd")" class="modern-btn-primary" data-hotkey="c">
+                <span class="material-symbols-outlined">add</span> New schedule
+            </a>
+        </div>
+        <div class="modern-card">
+            <div class="schedule-navigation">
+                <div class="schedule-period">
+                    <span class="material-symbols-outlined">calendar_month</span>
+                    <h2 class="modern-headline-md">@month.ToString("MMMM yyyy")</h2>
+                </div>
+                <div class="schedule-navigation-controls">
+                    <nav class="schedule-stepper" aria-label="Month navigation">
+                        <a asp-action="Index" asp-route-month="@month.AddMonths(-1).ToString("yyyy-MM")" aria-label="Previous month"><span class="material-symbols-outlined">chevron_left</span></a>
+                        <a asp-action="Index">This month</a>
+                        <a asp-action="Index" asp-route-month="@month.AddMonths(1).ToString("yyyy-MM")" aria-label="Next month"><span class="material-symbols-outlined">chevron_right</span></a>
+                    </nav>
+                    <form method="get" class="schedule-date-jump">
+                        <label for="month">Month</label>
+                        <input id="month" name="month" type="month" min="1900-01" max="9998-12" value="@month.ToString("yyyy-MM")" onchange="this.form.submit()" required />
+                        <noscript><button type="submit">Go</button></noscript>
+                    </form>
+                </div>
+            </div>
+            <div class="schedule-calendar-legend" aria-label="Schedule statuses">
+                @foreach (var status in new[] { MsapConstants.VesselScheduleStatus.Tentative, MsapConstants.VesselScheduleStatus.Confirmed, MsapConstants.VesselScheduleStatus.InProgress, MsapConstants.VesselScheduleStatus.Completed, MsapConstants.VesselScheduleStatus.Cancelled })
+                {
+                    <span class="schedule-legend-item" data-status="@status">@MsapConstants.VesselScheduleStatus.GetDisplayName(status)</span>
+                }
+                <span class="schedule-conflict-legend"><span class="material-symbols-outlined">warning</span> Overlap needs attention</span>
+            </div>
+            <div class="schedule-calendar-scroll">
+                <div class="schedule-calendar" aria-label="@month.ToString("MMMM yyyy") vessel schedules">
+                    @foreach (var name in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
+                    {
+                        <div class="schedule-weekday">@name</div>
+                    }
+                    @for (var i = 0; i < cellCount; i++)
+                    {
+                        var day = gridStart.AddDays(i);
+                        var entries = Model.Schedules.Where(s => s.PlannedStart < day.AddDays(1) && s.PlannedEnd > day).ToList();
+                        var conflicts = Model.ConflictsByDay.GetValueOrDefault(day) ?? new HashSet<int>();
+                        entries = entries.OrderByDescending(s => conflicts.Contains(s.VesselScheduleId)).ThenBy(s => s.PlannedStart).ToList();
+                        var active = entries.Count(s => s.Status != MsapConstants.VesselScheduleStatus.Cancelled);
+                        <a asp-action="Day" asp-route-date="@day.ToString("yyyy-MM-dd")"
+                           class="schedule-day @(day.Month != month.Month ? "schedule-outside" : "") @(day == today ? "schedule-today" : "") @(conflicts.Count > 0 ? "schedule-day-conflict" : "")"
+                           aria-label="@day.ToString("MMMM d, yyyy"), @active active schedules, @entries.Count total, @conflicts.Count schedules with overlaps">
+                            <div class="schedule-day-heading">
+                                <span class="schedule-day-number">@day.Day</span>
+                                @if (conflicts.Count > 0) { <span class="schedule-conflict-count" title="@conflicts.Count schedules have overlapping plans"><span class="material-symbols-outlined">warning</span>@conflicts.Count</span> }
+                                @if (day == today) { <small>Today</small> }
+                            </div>
+                            @foreach (var entry in entries.Take(2))
+                            {
+                                <div data-status="@entry.Status" class="schedule-preview @(entry.Status == MsapConstants.VesselScheduleStatus.Cancelled ? "schedule-cancelled" : "") @(conflicts.Contains(entry.VesselScheduleId) ? "schedule-preview-conflict" : "")"
+                                     title="@(conflicts.Contains(entry.VesselScheduleId) ? "Overlap needs attention · " : "")@entry.Vessel.VesselName · @MsapConstants.VesselScheduleStatus.GetDisplayName(entry.Status) · @entry.PlannedStart.ToString("MMM d HH:mm") – @entry.PlannedEnd.ToString("MMM d HH:mm")">
+                                    <span>@(entry.PlannedStart.Date < day ? "↳" : entry.PlannedStart.ToString("HH:mm"))</span>
+                                    <strong>@entry.Vessel.VesselName</strong>
+                                    <span class="visually-hidden">@(conflicts.Contains(entry.VesselScheduleId) ? "Overlap needs attention" : "") @MsapConstants.VesselScheduleStatus.GetDisplayName(entry.Status) @(entry.PlannedStart.Date < day ? "continuing from a previous day" : "")</span>
+                                </div>
+                            }
+                            @if (entries.Count > 2) { <small class="schedule-more">+@(entries.Count - 2) more</small> }
+                        </a>
+                    }
+                </div>
+            </div>
+            <div class="schedule-calendar-footer">
+                <span>@monthSchedules.Count schedules this month · @monthSchedules.Count(s => s.Status == MsapConstants.VesselScheduleStatus.Cancelled) cancelled</span>
+                <span>↳ Continuing booking · Select a day to view all schedules.</span>
+            </div>
+        </div>
+    </main>
+</div>
