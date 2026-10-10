@@ -56,6 +56,11 @@ namespace IBS.Utility.MSAP.Constants
             public const string Closed = "Closed";
             public const string Cancelled = "Cancelled";
             public const string Invalidated = "Invalidated";
+
+            public static string GetDisplayName(string status)
+            {
+                return status == Closed ? "Fully Billed" : status;
+            }
         }
 
         public static class DispatchTicketStatus
@@ -83,6 +88,11 @@ namespace IBS.Utility.MSAP.Constants
             public const string Confirmed = "Confirmed";
             public const string InProgress = "In Progress";
             public const string Completed = "Completed";
+
+            public static string GetDisplayName(string status)
+            {
+                return status == Completed ? "Service Completed" : status;
+            }
             public const string Cancelled = "Cancelled";
         }
 

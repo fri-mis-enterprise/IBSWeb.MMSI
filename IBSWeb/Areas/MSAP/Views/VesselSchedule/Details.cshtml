@@ -12,7 +12,7 @@
             <div class="schedule-details-identity">
                 <span class="modern-label">Vessel Schedule #@Model.VesselScheduleId</span>
                 <h1 class="modern-headline-md">@Model.Vessel.VesselName</h1>
-                <span class="modern-badge-sm">@Model.Status</span>
+                <span class="modern-badge-sm">@MsapConstants.VesselScheduleStatus.GetDisplayName(Model.Status)</span>
                 @if (Model.JobOrderId.HasValue)
                 {
                     <a asp-controller="JobOrder" asp-action="Details" asp-route-id="@Model.JobOrderId" class="schedule-progress-order">@Model.JobOrder?.JobOrderNumber</a>
@@ -77,7 +77,18 @@
                 </div>
             </section>
             <aside class="modern-card schedule-booking-actions" aria-labelledby="bookingActionsTitle">
-                <div class="schedule-booking-heading"><span class="material-symbols-outlined" aria-hidden="true">touch_app</span><h2 id="bookingActionsTitle">Other Actions</h2></div>
+                <div class="schedule-booking-heading"><span class="material-symbols-outlined" aria-hidden="true">touch_app</span><h2 id="bookingActionsTitle">Booking actions</h2></div>
+                @if (!closed && ViewBag.CanEdit == true && ViewBag.CanComplete == true)
+                {
+                    <div class="schedule-booking-body schedule-action-item">
+                        <h3>Finish vessel service</h3>
+                        <p class="schedule-muted">All recorded services have actual end times. Complete service when no more Dispatch Tickets are expected. Billing and collection continue separately.</p>
+                        <form asp-action="Complete" method="post" data-schedule-action="Complete">
+                            <input type="hidden" name="id" value="@Model.VesselScheduleId" />
+                            <button type="submit" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span> Complete Service</button>
+                        </form>
+                    </div>
+                }
                 <details class="schedule-booking-body">
                     <summary>Show other actions</summary>
                     @if (!closed && ViewBag.CanEdit == true)
@@ -85,7 +96,7 @@
                         @if (ViewBag.CanRevise == true)
                         {
                             <div class="schedule-action-item">
-                                <h3>Adjust the booking</h3><p class="schedule-muted">Update planned times, location or tug assignments. A confirmed booking returns to Tentative and its unused Job Order is retained as Invalidated.</p>
+                                <h3>Adjust the booking</h3><p class="schedule-muted">Adding tugboats only keeps the booking confirmed and retains its Job Order. Other booking changes return it to Tentative and retain the old unused Job Order as Invalidated.</p>
                                 <a asp-action="Edit" asp-route-id="@Model.VesselScheduleId" class="modern-btn-secondary"><span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span> Revise Schedule</a>
                             </div>
                         }
@@ -106,7 +117,7 @@
                     }
                     @if (closed)
                     {
-                        <p class="schedule-muted">This booking is closed. Schedule changes are no longer available.</p>
+                        <p class="schedule-muted">@(Model.Status == MsapConstants.VesselScheduleStatus.Completed ? "Service is completed. Tariff, approval, billing, posting and collection can continue." : "This booking is cancelled. Schedule changes are no longer available.")</p>
                     }
                     @if (Model.Status == MsapConstants.VesselScheduleStatus.Tentative && Model.JobOrderId == null)
                     {
@@ -134,7 +145,13 @@
                 if (reviewing) return;
                 reviewing = true;
                 const action = form.dataset.scheduleAction;
-                const result = await ModernAlert.confirm({ title: action + ' schedule?', text: 'This cancels the schedule and any linked Job Order together. The booking becomes read-only and records are retained.', icon: 'warning', confirmText: action + ' Schedule' });
+                const completing = action === 'Complete';
+                const result = await ModernAlert.confirm({
+                    title: completing ? 'Complete vessel service?' : 'Cancel schedule?',
+                    text: completing ? 'Confirm that all services are finished and no more Dispatch Tickets are expected. New tickets will be blocked. Tariff, approval, billing, posting and collection will continue.' : 'This cancels the schedule and any linked Job Order together. The booking becomes read-only and records are retained.',
+                    icon: 'warning',
+                    confirmText: completing ? 'Complete Service' : 'Cancel Schedule'
+                });
                 if (result.isConfirmed) {
                     ModernAlert.showLoading('Updating schedule…');
                     form.submit();

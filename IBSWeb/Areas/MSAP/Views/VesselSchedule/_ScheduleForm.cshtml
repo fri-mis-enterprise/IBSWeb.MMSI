@@ -9,11 +9,11 @@
         </div>
         <section class="modern-card schedule-progress-card" data-status="@Model.Status" aria-labelledby="scheduleProgressTitle">
             <div class="schedule-progress-heading">
-                <div><span class="modern-label">Schedule status</span><h2 id="scheduleProgressTitle">@(Model.VesselScheduleId == 0 ? "Save as Tentative" : Model.Status)</h2></div>
+                <div><span class="modern-label">Schedule status</span><h2 id="scheduleProgressTitle">@(Model.VesselScheduleId == 0 ? "Save as Tentative" : MsapConstants.VesselScheduleStatus.GetDisplayName(Model.Status))</h2></div>
                 <span class="material-symbols-outlined schedule-progress-emblem" aria-hidden="true">edit_calendar</span>
             </div>
             <partial name="_ScheduleProgress" model="Model.Status" />
-            <p class="schedule-muted">@(Model.VesselScheduleId == 0 ? "Saving creates a tentative booking. Next, review and confirm it to create the Job Order." : "Revisions keep the current schedule status. Use Schedule Details to confirm or close the booking.") Actual service times are recorded in Dispatch Tickets.</p>
+            <p class="schedule-muted">@(Model.VesselScheduleId == 0 ? "Saving creates a tentative booking. Next, review and confirm it to create the Job Order." : "Adding tugboats only retains confirmation and the existing Job Order. Other changes to a confirmed booking require review and confirmation again.") Actual service times are recorded in Dispatch Tickets.</p>
         </section>
         <form method="post" id="scheduleForm" data-terminals-url="@Url.Action("GetTerminalsByPort")" data-bookings-url="@Url.Action("GetTugboatBookings")" data-details-url="@Url.Action("Details")">
             @Html.AntiForgeryToken()

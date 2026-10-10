@@ -19,11 +19,16 @@ namespace Checks.MSAP
             schedule.AssignedTugboatIds = "[1]";
             Check(JobProgressCalculator.Calculate(null, schedule, [], []).Stage == 1, "Prepared booking must require Confirmation.");
             Check(JobProgressCalculator.Calculate(job, null, [], []).Stage == 2, "Direct Job Order must start at Service.");
+            Check(MsapConstants.VesselScheduleStatus.GetDisplayName("Completed") == "Service Completed"
+                && MsapConstants.JobOrderStatus.GetDisplayName("Closed") == "Fully Billed", "Completion labels must distinguish service from billing.");
+            Check(!JobOrderService.CanCompleteService([]), "Service completion must require active tickets.");
             var first = Ticket(1, "For Billing");
+            Check(JobOrderService.CanCompleteService([first]), "Finished actual service must allow completion before billing.");
             var second = Ticket(2, "For Tariff");
             var deleted = new DispatchTicket { DispatchTicketId = 3, Status = "Deleted" };
             Check(JobProgressCalculator.Calculate(job, null, [first, second, deleted], []).Stage == 3, "One unfinished tariff must block approved tickets; deleted tickets must be excluded.");
             second.TimeArrived = null;
+            Check(!JobOrderService.CanCompleteService([first, second, deleted]), "Missing actual times must prevent service completion.");
             Check(JobProgressCalculator.Calculate(job, null, [first, second], []).Stage == 2, "Missing actual times must block tariff progression.");
             second = Ticket(2, "Disapproved");
             var rejected = JobProgressCalculator.Calculate(job, null, [first, second], []);
@@ -42,7 +47,9 @@ namespace Checks.MSAP
             var split = new Billing { MsapBillingId = 2, Status = "For Posting", Balance = 25 };
             Check(JobProgressCalculator.Calculate(job, null, [first, second], [bill, split]).Stage == 6, "Every split billing must be posted before Collection.");
             split.Status = "For Collection";
-            var collection = JobProgressCalculator.Calculate(job, null, [first, second], [bill, split]);
+            job.Status = MsapConstants.JobOrderStatus.Closed;
+            schedule.Status = MsapConstants.VesselScheduleStatus.Completed;
+            var collection = JobProgressCalculator.Calculate(job, schedule, [first, second], [bill, split]);
             Check(collection.Stage == 7 && collection.Billings.Count == 2 && collection.Guidance.Contains("125.00", StringComparison.Ordinal), "Collection must aggregate every outstanding billing.");
             bill.Status = "Collected";
             bill.Balance = 0;
@@ -55,7 +62,9 @@ namespace Checks.MSAP
             split.Status = "Collected";
             bill.Status = "For Posting";
             first.Status = second.Status = "For Billing";
-            Check(JobProgressCalculator.Calculate(job, schedule, [first, second], [bill, split]).Stage == 6, "Reversal must return progress to Posting.");
+            job.Status = MsapConstants.JobOrderStatus.Open;
+            Check(JobProgressCalculator.Calculate(job, schedule, [first, second], [bill, split]).Stage == 6
+                && schedule.Status == MsapConstants.VesselScheduleStatus.Completed, "Reversal must return progress to Posting without reopening vessel service.");
             Check(JobProgressCalculator.Calculate(job, null, [deleted], [bill]).Stage == 6, "Terminal tickets must not block existing billing progression.");
             first.Status = "Unknown";
             Check(JobProgressCalculator.Calculate(job, null, [first], []).Stopped, "Unknown statuses must block progression.");

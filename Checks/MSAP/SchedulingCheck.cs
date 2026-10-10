@@ -386,6 +386,26 @@ namespace Checks.MSAP
                 var originalOrder = await db.MsapJobOrders.SingleAsync(j => j.JobOrderId == firstConfirmation.Data);
                 Check(await jobs.GetEditErrorAsync(originalOrder, default) != null, "Scheduled Job Order remained editable directly.");
                 int orderCount = await db.MsapJobOrders.CountAsync();
+                var additionalTug = new Tugboat { TugboatNumber = "003", TugboatName = "Additional Tug", PortId = port.PortId, IsCompanyOwned = true };
+                db.Add(additionalTug);
+                await db.SaveChangesAsync();
+                var tugAddition = Booking(28);
+                tugAddition.VesselScheduleId = revisable.VesselScheduleId;
+                tugAddition.AssignedTugboatIds = JsonSerializer.Serialize(new[] { tug.TugboatId, additionalTug.TugboatId });
+                Check((await schedules.UpdateAsync(tugAddition, "check")).IsSuccess, "Could not add a tugboat to the confirmed booking.");
+                revisable = await Reload(revisable.VesselScheduleId);
+                originalOrder = await db.MsapJobOrders.SingleAsync(j => j.JobOrderId == firstConfirmation.Data);
+                Check(revisable.Status == MsapConstants.VesselScheduleStatus.Confirmed && revisable.JobOrderId == firstConfirmation.Data
+                    && originalOrder.Status == MsapConstants.JobOrderStatus.Open && originalOrder.RequiredTugCount == 2
+                    && originalOrder.PreferredTugboatId == tug.TugboatId && await db.MsapJobOrders.CountAsync() == orderCount,
+                    "Adding only tugboats invalidated or replaced the Job Order, lost confirmation, or failed to update its tug count.");
+                var repeatedAssignment = Booking(28);
+                repeatedAssignment.VesselScheduleId = revisable.VesselScheduleId;
+                repeatedAssignment.AssignedTugboatIds = JsonSerializer.Serialize(new[] { additionalTug.TugboatId, tug.TugboatId, additionalTug.TugboatId });
+                Check((await schedules.UpdateAsync(repeatedAssignment, "check")).IsSuccess, "Reordered duplicate tug assignments could not be saved.");
+                revisable = await Reload(revisable.VesselScheduleId);
+                Check(revisable.JobOrderId == firstConfirmation.Data && revisable.Status == MsapConstants.VesselScheduleStatus.Confirmed
+                    && await db.MsapJobOrders.CountAsync() == orderCount, "An unchanged tugboat set caused unnecessary invalidation.");
                 var newPlan = Booking(28);
                 newPlan.VesselScheduleId = revisable.VesselScheduleId;
                 newPlan.PlannedStart = newPlan.PlannedStart.AddHours(1);
@@ -428,7 +448,7 @@ namespace Checks.MSAP
                 directOptions.ServiceId = serviceType.ServiceId;
                 Check((await dispatcher.CreateDispatchTicketAsync(directOptions, null, null, "check", default)).IsSuccess, "Direct ticket entry failed.");
                 Check(!(await jobs.UpdateJobOrderAsync(directRevision, "check", default)).IsSuccess, "Direct Job Order remained editable after ticket entry.");
-                Console.WriteLine("PASS: unused schedule revision retains invalidated numbering; reconfirmation creates a replacement; scheduled orders and orders with tickets cannot be edited; assigned tugboats are enforced.");
+                Console.WriteLine("PASS: tugboat additions preserve confirmation and the same order; other unused schedule revisions retain invalidated numbering; reconfirmation creates a replacement; scheduled orders and orders with tickets cannot be edited; assigned tugboats are enforced.");
                 Console.WriteLine("PASS: scheduling migration, tentative-only save, booking review, customer/tug/period/overlap guards, linked order, revisions, actual times, synchronized cancellation, billing guards, operational completion, duplicate clicks, concurrent numbering/cancellation and atomic rollback.");
             }
             finally

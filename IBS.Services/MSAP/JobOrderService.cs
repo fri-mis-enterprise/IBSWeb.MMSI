@@ -191,6 +191,14 @@ namespace IBS.Services.MSAP
             return ChangeBookingStatusAsync(id, MsapConstants.VesselScheduleStatus.Completed, username, ct);
         }
 
+        public static bool CanCompleteService(IEnumerable<DispatchTicket> tickets)
+        {
+            var active = tickets.Where(t => t.Status != MsapConstants.DispatchTicketStatus.Deleted).ToList();
+            return active.Count > 0 && active.All(t => t.DateLeft != null && t.TimeLeft != null && t.DateArrived != null && t.TimeArrived != null
+                && t.DateArrived.Value.ToDateTime(t.TimeArrived.Value) > t.DateLeft.Value.ToDateTime(t.TimeLeft.Value)
+                && t.DateArrived.Value.ToDateTime(t.TimeArrived.Value) <= DateTimeHelper.GetCurrentPhilippineTime());
+        }
+
         private async Task<ServiceResult> ChangeBookingStatusAsync(int id, string status, string username, CancellationToken ct)
         {
             var result = ServiceResult.Failure("Failed to update the booking. Please try again.");
@@ -238,10 +246,7 @@ namespace IBS.Services.MSAP
                     }
                     else
                     {
-                        var active = tickets.Where(t => t.Status != MsapConstants.DispatchTicketStatus.Deleted).ToList();
-                        if (schedule == null || active.Count == 0 || active.Any(t => t.DateLeft == null || t.TimeLeft == null || t.DateArrived == null || t.TimeArrived == null
-                            || t.DateArrived.Value.ToDateTime(t.TimeArrived.Value) <= t.DateLeft.Value.ToDateTime(t.TimeLeft.Value)
-                            || t.DateArrived.Value.ToDateTime(t.TimeArrived.Value) > DateTimeHelper.GetCurrentPhilippineTime()))
+                        if (schedule == null || !CanCompleteService(tickets))
                         {
                             result = ServiceResult.Failure("Record valid actual start and end times for all active Dispatch Tickets before completing the vessel booking.", ServiceResultStatus.ValidationError);
                             return;
@@ -257,7 +262,7 @@ namespace IBS.Services.MSAP
                     await unitOfWork.SaveAsync(ct);
                     result = ServiceResult.Success(status == MsapConstants.VesselScheduleStatus.Cancelled
                         ? "Job Order and linked vessel booking cancelled. Records were retained."
-                        : "Vessel booking completed. Billing and collection can continue through the Job Order.");
+                        : "Service completed. No more Dispatch Tickets can be added. Tariff, approval, billing, posting and collection can continue through the Job Order.");
                 }, ct);
                 return result;
             }

@@ -68,6 +68,7 @@ namespace IBS.Services.MSAP
                         result = ServiceResult.Failure(error, ServiceResultStatus.ValidationError);
                         return;
                     }
+                    bool keepJobOrder = existing.JobOrderId.HasValue && HasOnlyAddedTugboats(existing, model);
                     if (existing.JobOrderId.HasValue)
                     {
                         var job = await unitOfWork.JobOrder.GetForUpdateAsync(existing.JobOrderId.Value, ct);
@@ -90,14 +91,24 @@ namespace IBS.Services.MSAP
                             result = ServiceResult.Failure("Cannot revise a booking in a closed period.", ServiceResultStatus.ValidationError);
                             return;
                         }
-                        job.Status = MsapConstants.JobOrderStatus.Invalidated;
                         job.EditedBy = username;
                         job.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
-                        await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username,
-                            $"Invalidated Job Order #{job.JobOrderNumber} after revision of vessel schedule #{existing.VesselScheduleId}; retained for reference.", "Job Order", job.JobOrderId, job.JobOrderNumber), ct);
-                        existing.JobOrderId = null;
-                        existing.JobOrder = null;
-                        existing.Status = MsapConstants.VesselScheduleStatus.Tentative;
+                        if (keepJobOrder)
+                        {
+                            List<int> tugs = JsonSerializer.Deserialize<List<int>>(model.AssignedTugboatIds ?? "[]") ?? [];
+                            job.RequiredTugCount = Math.Max(tugs.Count, 1);
+                            await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username,
+                                $"Updated assigned tugboat count on Job Order #{job.JobOrderNumber} for vessel schedule #{existing.VesselScheduleId}.", "Job Order", job.JobOrderId, job.JobOrderNumber), ct);
+                        }
+                        else
+                        {
+                            job.Status = MsapConstants.JobOrderStatus.Invalidated;
+                            await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username,
+                                $"Invalidated Job Order #{job.JobOrderNumber} after revision of vessel schedule #{existing.VesselScheduleId}; retained for reference.", "Job Order", job.JobOrderId, job.JobOrderNumber), ct);
+                            existing.JobOrderId = null;
+                            existing.JobOrder = null;
+                            existing.Status = MsapConstants.VesselScheduleStatus.Tentative;
+                        }
                     }
                     existing.CustomerId = model.CustomerId;
                     existing.VesselId = model.VesselId;
@@ -113,7 +124,9 @@ namespace IBS.Services.MSAP
                     existing.EditedDate = DateTimeHelper.GetCurrentPhilippineTime();
                     await unitOfWork.AuditTrail.AddAsync(new AuditTrail(username, $"Updated vessel schedule #{model.VesselScheduleId}. Overlap override: {allowConflicts}", "Vessel Schedule", model.VesselScheduleId), ct);
                     await unitOfWork.SaveAsync(ct);
-                    result = ServiceResult.Success("Schedule updated. Review and confirm the booking before creating its Job Order.");
+                    result = ServiceResult.Success(keepJobOrder
+                        ? "Assigned tugboats updated. The booking remains confirmed with the same Job Order."
+                        : "Schedule updated. Review and confirm the booking before creating its Job Order.");
                 }, ct);
 
                 return result;
@@ -123,6 +136,17 @@ namespace IBS.Services.MSAP
                 logger.LogError(ex, "Failed to update vessel schedule {Id}", model.VesselScheduleId);
                 return result.IsSuccess ? ServiceResult.Failure("Failed to update schedule. Please try again.") : result;
             }
+        }
+
+        private static bool HasOnlyAddedTugboats(VesselSchedule existing, VesselSchedule updated)
+        {
+            List<int> previousTugs = JsonSerializer.Deserialize<List<int>>(existing.AssignedTugboatIds ?? "[]") ?? [];
+            List<int> updatedTugs = JsonSerializer.Deserialize<List<int>>(updated.AssignedTugboatIds ?? "[]") ?? [];
+            return existing.CustomerId == updated.CustomerId && existing.VesselId == updated.VesselId
+                && existing.PortId == updated.PortId && existing.TerminalId == updated.TerminalId
+                && existing.PlannedStart == updated.PlannedStart && existing.PlannedEnd == updated.PlannedEnd
+                && existing.VoyageNumber == updated.VoyageNumber && existing.VesselType == updated.VesselType
+                && existing.Notes == updated.Notes && previousTugs.All(updatedTugs.Contains);
         }
 
         public async Task<ServiceResult<int>> ConfirmAsync(int id, DateTime reviewedAt, string username, CancellationToken ct = default, bool allowConflicts = false)

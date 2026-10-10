@@ -142,7 +142,7 @@ namespace IBSWeb.Areas.MSAP.Controllers
 
                 if (result.IsSuccess)
                 {
-                    TempData["success"] = "Schedule updated successfully.";
+                    TempData["success"] = result.Message;
                     return RedirectToAction(nameof(Details), new { id = vm.VesselScheduleId });
                 }
 
@@ -174,6 +174,8 @@ namespace IBSWeb.Areas.MSAP.Controllers
             bool hasActiveTickets = schedule.JobOrderId.HasValue && await unitOfWork.DispatchTicket.GetAsync(t => t.JobOrderId == schedule.JobOrderId
                 && (t.Status != MsapConstants.DispatchTicketStatus.Deleted || t.BillingId != null), ct) != null;
             ViewBag.CanRevise = schedule.JobOrderId == null || (job?.Status == MsapConstants.JobOrderStatus.Open && ViewBag.HasDispatchTickets != true && !hasBilling);
+            ViewBag.CanComplete = job != null && schedule.Status is not (MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled)
+                && JobOrderService.CanCompleteService(await unitOfWork.DispatchTicket.GetAllAsync(t => t.JobOrderId == job.JobOrderId, ct));
             ViewBag.CanCancel = schedule.JobOrderId == null || (job?.Status == MsapConstants.JobOrderStatus.Open && !hasActiveTickets && !hasBilling);
             return View(schedule);
         }

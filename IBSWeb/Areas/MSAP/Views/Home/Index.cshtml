@@ -97,7 +97,7 @@ else
                                     <tr>
                                         <td class="dashboard-window"><strong>@schedule.PlannedStart.ToString(schedule.PlannedStart.Date == day ? "HH:mm" : "MMM d HH:mm")</strong><small>to @schedule.PlannedEnd.ToString(schedule.PlannedEnd.Date == day ? "HH:mm" : "MMM d HH:mm")</small>@if (schedule.PlannedStart.Date < day) { <small>Continuing</small> }</td>
                                         <td><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" class="dashboard-vessel">@schedule.Vessel.VesselName</a><small>@schedule.Port.PortName · @schedule.Terminal.TerminalName</small></td>
-                                        <td><span class="dashboard-status @statusClass">@schedule.Status</span>@if (Model.ConflictingScheduleIds.Contains(schedule.VesselScheduleId)) { <small class="dashboard-warning">Overlap</small> }</td>
+                                        <td><span class="dashboard-status @statusClass">@MsapConstants.VesselScheduleStatus.GetDisplayName(schedule.Status)</span>@if (Model.ConflictingScheduleIds.Contains(schedule.VesselScheduleId)) { <small class="dashboard-warning">Overlap</small> }</td>
                                         <td><strong>@assigned</strong><small>Assigned</small></td>
                                         <td><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" aria-label="Open @schedule.Vessel.VesselName schedule">Open</a></td>
                                     </tr>

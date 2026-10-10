@@ -128,7 +128,7 @@ foreach (var status in new[] { "Tentative", "Confirmed", "In Progress", "Complet
     else
     {
         Check(Regex.Matches(html, "aria-current=\"step\"").Count == 1, $"Schedule {status} must have one current stage.");
-        Check(html.Contains($"<strong>{status}</strong>", StringComparison.Ordinal), $"Schedule {status} stage is missing.");
+        Check(html.Contains($"<strong>{MsapConstants.VesselScheduleStatus.GetDisplayName(status)}</strong>", StringComparison.Ordinal), $"Schedule {status} stage is missing.");
         Check(Regex.Matches(html, "class=\"schedule-progress-step\"").Count == (status == "In Progress" ? 4 : 3), "Schedule progress adds an operation step to the normal flow.");
     }
 }

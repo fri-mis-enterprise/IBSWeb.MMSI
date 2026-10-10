@@ -59,7 +59,7 @@
                 <select id="scheduleStatus" class="modern-input">
                     <option value="">All statuses</option>
                     @foreach (var status in new[] { MsapConstants.VesselScheduleStatus.Tentative, MsapConstants.VesselScheduleStatus.Confirmed, MsapConstants.VesselScheduleStatus.InProgress, MsapConstants.VesselScheduleStatus.Completed, MsapConstants.VesselScheduleStatus.Cancelled })
-                    { <option>@status</option> }
+                    { <option value="@status">@MsapConstants.VesselScheduleStatus.GetDisplayName(status)</option> }
                 </select>
             </div>
         </div>
@@ -78,7 +78,7 @@
                         </div>
                         <div class="schedule-actions">
                             @if (conflictingIds.Contains(schedule.VesselScheduleId)) { <span class="schedule-conflict-legend"><span class="material-symbols-outlined">warning</span>Overlap</span> }
-                            <span class="schedule-status" data-status="@schedule.Status">@schedule.Status</span>
+                            <span class="schedule-status" data-status="@schedule.Status">@MsapConstants.VesselScheduleStatus.GetDisplayName(schedule.Status)</span>
                             @if (!closed && schedule.JobOrderId == null && ViewBag.CanConfirm == true)
                             {
                                 <a asp-action="Confirm" asp-route-id="@schedule.VesselScheduleId" class="modern-btn-primary">Confirm Schedule</a>
@@ -141,7 +141,7 @@
                             {
                                 <a class="schedule-fleet-booking" asp-action="Details" asp-route-id="@booking.VesselScheduleId">
                                     <span>@booking.PlannedStart.ToString("MMM d HH:mm") – @booking.PlannedEnd.ToString("MMM d HH:mm")</span>
-                                    <strong>@booking.Vessel.VesselName</strong><span class="schedule-status" data-status="@booking.Status">@booking.Status</span>
+                                    <strong>@booking.Vessel.VesselName</strong><span class="schedule-status" data-status="@booking.Status">@MsapConstants.VesselScheduleStatus.GetDisplayName(booking.Status)</span>
                                 </a>
                             }
                         </div>

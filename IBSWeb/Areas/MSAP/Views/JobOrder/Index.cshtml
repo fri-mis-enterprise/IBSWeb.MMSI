@@ -105,7 +105,7 @@
                         data: "status",
                         render: (data) => {
                             const cls = data === "Open" ? "status-open" : "status-closed";
-                            return ModernTable.render.badge(data, cls);
+                            return ModernTable.render.badge(data === "Closed" ? "@MsapConstants.JobOrderStatus.GetDisplayName(MsapConstants.JobOrderStatus.Closed)" : data, cls);
                         }
                     },
                     {

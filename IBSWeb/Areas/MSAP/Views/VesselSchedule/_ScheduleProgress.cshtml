@@ -9,7 +9,7 @@
     {
         steps.Add((MsapConstants.VesselScheduleStatus.InProgress, "Operation underway", "directions_boat"));
     }
-    steps.Add((MsapConstants.VesselScheduleStatus.Completed, "Booking closed", "check_circle"));
+    steps.Add((MsapConstants.VesselScheduleStatus.Completed, "All services finished; billing and collection continue", "check_circle"));
     var currentStep = steps.FindIndex(step => step.Status == Model);
 }
 @if (Model == MsapConstants.VesselScheduleStatus.Cancelled)
@@ -28,7 +28,7 @@ else
             var state = index == currentStep ? "current" : index < currentStep ? "done" : "upcoming";
             <li class="schedule-progress-step" data-state="@state" aria-current="@(index == currentStep ? "step" : null)">
                 <span class="schedule-progress-node material-symbols-outlined" aria-hidden="true">@(index < currentStep ? "check" : step.Icon)</span>
-                <strong>@step.Status</strong>
+                <strong>@MsapConstants.VesselScheduleStatus.GetDisplayName(step.Status)</strong>
                 <span class="visually-hidden">@step.Description</span>
                 <span class="visually-hidden">@(state == "current" ? "Current stage" : state == "done" ? "Passed" : "Next stage")</span>
             </li>

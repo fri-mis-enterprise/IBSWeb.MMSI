@@ -21,7 +21,11 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <h1 class="modern-headline-lg">Job Order #@Model.JobOrderNumber</h1>
-                    <span class="modern-badge @(Model.Status == MsapConstants.JobOrderStatus.Open ? "status-open" : "status-closed")">@Model.Status</span>
+                    <span class="modern-badge @(Model.Status == MsapConstants.JobOrderStatus.Open ? "status-open" : "status-closed")">@MsapConstants.JobOrderStatus.GetDisplayName(Model.Status)</span>
+                    @if (booking?.Status == MsapConstants.VesselScheduleStatus.Completed)
+                    {
+                        <span class="modern-badge-sm">@MsapConstants.VesselScheduleStatus.GetDisplayName(booking.Status)</span>
+                    }
                 </div>
             </div>
             <div class="flex gap-2" style="flex-wrap: wrap;">

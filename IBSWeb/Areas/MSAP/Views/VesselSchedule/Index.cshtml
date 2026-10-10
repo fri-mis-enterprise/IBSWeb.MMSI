@@ -43,7 +43,7 @@
             <div class="schedule-calendar-legend" aria-label="Schedule statuses">
                 @foreach (var status in new[] { MsapConstants.VesselScheduleStatus.Tentative, MsapConstants.VesselScheduleStatus.Confirmed, MsapConstants.VesselScheduleStatus.InProgress, MsapConstants.VesselScheduleStatus.Completed, MsapConstants.VesselScheduleStatus.Cancelled })
                 {
-                    <span class="schedule-legend-item" data-status="@status">@status</span>
+                    <span class="schedule-legend-item" data-status="@status">@MsapConstants.VesselScheduleStatus.GetDisplayName(status)</span>
                 }
                 <span class="schedule-conflict-legend"><span class="material-symbols-outlined">warning</span> Overlap needs attention</span>
             </div>
@@ -71,10 +71,10 @@
                             @foreach (var entry in entries.Take(2))
                             {
                                 <div data-status="@entry.Status" class="schedule-preview @(entry.Status == MsapConstants.VesselScheduleStatus.Cancelled ? "schedule-cancelled" : "") @(conflicts.Contains(entry.VesselScheduleId) ? "schedule-preview-conflict" : "")"
-                                     title="@(conflicts.Contains(entry.VesselScheduleId) ? "Overlap needs attention · " : "")@entry.Vessel.VesselName · @entry.Status · @entry.PlannedStart.ToString("MMM d HH:mm") – @entry.PlannedEnd.ToString("MMM d HH:mm")">
+                                     title="@(conflicts.Contains(entry.VesselScheduleId) ? "Overlap needs attention · " : "")@entry.Vessel.VesselName · @MsapConstants.VesselScheduleStatus.GetDisplayName(entry.Status) · @entry.PlannedStart.ToString("MMM d HH:mm") – @entry.PlannedEnd.ToString("MMM d HH:mm")">
                                     <span>@(entry.PlannedStart.Date < day ? "↳" : entry.PlannedStart.ToString("HH:mm"))</span>
                                     <strong>@entry.Vessel.VesselName</strong>
-                                    <span class="visually-hidden">@(conflicts.Contains(entry.VesselScheduleId) ? "Overlap needs attention" : "") @entry.Status @(entry.PlannedStart.Date < day ? "continuing from a previous day" : "")</span>
+                                    <span class="visually-hidden">@(conflicts.Contains(entry.VesselScheduleId) ? "Overlap needs attention" : "") @MsapConstants.VesselScheduleStatus.GetDisplayName(entry.Status) @(entry.PlannedStart.Date < day ? "continuing from a previous day" : "")</span>
                                 </div>
                             }
                             @if (entries.Count > 2) { <small class="schedule-more">+@(entries.Count - 2) more</small> }
