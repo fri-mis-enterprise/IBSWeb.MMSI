@@ -90,7 +90,6 @@ else
                     <div class="dashboard-schedule-summary">
                         <span><strong>@Model.ScheduleCount</strong> schedules</span>
                         <span class="@(Model.ConflictingScheduleIds.Count > 0 ? "dashboard-warning" : "")"><strong>@Model.ConflictingScheduleIds.Count</strong> with overlaps</span>
-                        <span class="@(Model.ShortageCount > 0 ? "dashboard-warning" : "")"><strong>@Model.ShortageCount</strong> need tugs</span>
                     </div>
                     @if (Model.Schedules.Count == 0)
                     {
@@ -106,13 +105,12 @@ else
                                 @foreach (var schedule in Model.Schedules)
                                 {
                                     var assigned = Model.AssignedTugs[schedule.VesselScheduleId];
-                                    var shortage = schedule.Status != MsapConstants.VesselScheduleStatus.Completed && assigned < schedule.RequiredTugCount;
                                     var statusClass = schedule.Status switch { MsapConstants.VesselScheduleStatus.InProgress => "is-running", MsapConstants.VesselScheduleStatus.Confirmed => "is-confirmed", MsapConstants.VesselScheduleStatus.Completed => "is-completed", _ => "is-tentative" };
                                     <tr>
                                         <td class="dashboard-window"><strong>@schedule.PlannedStart.ToString(schedule.PlannedStart.Date == day ? "HH:mm" : "MMM d HH:mm")</strong><small>to @schedule.PlannedEnd.ToString(schedule.PlannedEnd.Date == day ? "HH:mm" : "MMM d HH:mm")</small>@if (schedule.PlannedStart.Date < day) { <small>Continuing</small> }</td>
                                         <td><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" class="dashboard-vessel">@schedule.Vessel.VesselName</a><small>@schedule.Port.PortName · @schedule.Terminal.TerminalName</small></td>
                                         <td><span class="dashboard-status @statusClass">@schedule.Status</span>@if (Model.ConflictingScheduleIds.Contains(schedule.VesselScheduleId)) { <small class="dashboard-warning">Overlap</small> }</td>
-                                        <td><strong class="@(shortage ? "dashboard-warning" : "")">@assigned / @schedule.RequiredTugCount</strong><small>@(shortage ? "Needs tugs" : "Assigned")</small></td>
+                                        <td><strong>@assigned</strong><small>Assigned</small></td>
                                         <td><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" aria-label="Open @schedule.Vessel.VesselName schedule">Open</a></td>
                                     </tr>
                                 }
@@ -140,7 +138,7 @@ else
                         @foreach (var schedule in Model.UpcomingSchedules)
                         {
                             var assigned = Model.AssignedTugs[schedule.VesselScheduleId];
-                            <li><div><span>@schedule.PlannedStart.ToString("ddd, MMM d · HH:mm") <span aria-hidden="true">→</span> @schedule.PlannedEnd.ToString(schedule.PlannedEnd.Date == schedule.PlannedStart.Date ? "HH:mm" : "MMM d HH:mm")</span><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId">@schedule.Vessel.VesselName</a><small>@schedule.Port.PortName · @schedule.Terminal.TerminalName</small><small class="@(assigned < schedule.RequiredTugCount ? "dashboard-warning" : "")">@assigned / @schedule.RequiredTugCount tugs assigned</small></div><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" aria-label="Open @schedule.Vessel.VesselName schedule">Open</a></li>
+                            <li><div><span>@schedule.PlannedStart.ToString("ddd, MMM d · HH:mm") <span aria-hidden="true">→</span> @schedule.PlannedEnd.ToString(schedule.PlannedEnd.Date == schedule.PlannedStart.Date ? "HH:mm" : "MMM d HH:mm")</span><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId">@schedule.Vessel.VesselName</a><small>@schedule.Port.PortName · @schedule.Terminal.TerminalName</small><small>@assigned tugs assigned</small></div><a asp-controller="VesselSchedule" asp-action="Details" asp-route-id="@schedule.VesselScheduleId" aria-label="Open @schedule.Vessel.VesselName schedule">Open</a></li>
                         }
                     </ul>
                 }

@@ -22,7 +22,6 @@ namespace IBS.Models.MSAP.ViewModels
         public int DispatchesMonth { get; set; }
         public int VesselsMonth { get; set; }
         public int ScheduleCount { get; set; }
-        public int ShortageCount { get; set; }
         public List<VesselSchedule> Schedules { get; set; } = [];
         public Dictionary<int, int> AssignedTugs { get; set; } = [];
         public HashSet<int> ConflictingScheduleIds { get; set; } = [];

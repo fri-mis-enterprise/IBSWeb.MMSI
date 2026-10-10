@@ -123,8 +123,6 @@ namespace IBSWeb.Areas.MSAP.Controllers
                     }
                 }
                 model.ScheduleCount = schedules.Count;
-                model.ShortageCount = schedules.Count(s => s.Status != MsapConstants.VesselScheduleStatus.Completed
-                    && model.AssignedTugs[s.VesselScheduleId] < s.RequiredTugCount);
                 model.Schedules = schedules.OrderBy(s => s.Status == MsapConstants.VesselScheduleStatus.Completed)
                     .ThenBy(s => s.PlannedStart).Take(6).ToList();
             }

@@ -30,10 +30,6 @@ namespace IBS.Models.MSAP.ViewModels
         [Display(Name = "Planned End")]
         public DateTime PlannedEnd { get; set; }
 
-        [Display(Name = "Required Tug Count")]
-        [Range(1, 10, ErrorMessage = "Tug count must be between 1 and 10")]
-        public int RequiredTugCount { get; set; } = 1;
-
         [Display(Name = "Assigned Tugboats")]
         public List<int>? SelectedTugboatIds { get; set; }
 

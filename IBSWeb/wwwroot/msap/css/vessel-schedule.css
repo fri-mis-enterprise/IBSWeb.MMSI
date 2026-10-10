@@ -149,3 +149,84 @@
 .schedule-selected-tugs button { border: 1px solid var(--outline-variant); border-radius: 5px; padding: .3rem .5rem; background: var(--surface-container-low); color: var(--on-surface); font-size: .75rem; }
 .schedule-selected-tugs button[data-state="conflict"] { border-color: #d97706; color: #b45309; }
 @media (max-width: 600px) { .schedule-picker-controls { flex-wrap: wrap; } .schedule-picker-controls select { flex: 1 1 100%; } .schedule-tug-choice { flex-wrap: wrap; } }
+
+/* Create and edit workspace */
+#scheduleForm { --schedule-teal: #0f766e; }
+[data-bs-theme="dark"] #scheduleForm { --schedule-teal: #7edbd2; }
+[data-bs-theme="dark"] #scheduleForm [data-status="Tentative"] { --schedule-accent: #b69cff; }
+[data-bs-theme="dark"] #scheduleForm [data-status="Confirmed"] { --schedule-accent: #8eb4ff; }
+[data-bs-theme="dark"] #scheduleForm [data-status="In Progress"] { --schedule-accent: #fbbf24; }
+[data-bs-theme="dark"] #scheduleForm [data-status="Completed"] { --schedule-accent: #86d6a4; }
+[data-bs-theme="dark"] #scheduleForm [data-status="Cancelled"] { --schedule-accent: #bdc6d3; }
+.schedule-workspace:has(#scheduleForm) { max-width: 1440px; }
+.schedule-form-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 1rem; align-items: start; }
+#scheduleForm .modern-card { min-width: 0; border-radius: 14px; }
+#scheduleForm .modern-card-header-info { padding: 1rem; border-bottom: 1px solid var(--outline-variant); }
+#scheduleForm .modern-card-header-info > .material-symbols-outlined { color: var(--schedule-teal); background: color-mix(in srgb, #14b8a6 12%, var(--surface-container-lowest)); padding: .4rem; border-radius: 9px; }
+#scheduleForm .modern-card-body { padding: 1rem; gap: 1rem; }
+.schedule-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.schedule-field { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+.schedule-field .modern-label { margin: 0; }
+#scheduleForm .field-validation-valid,
+#terminalMessage:empty { display: none; }
+.schedule-field-wide { grid-column: 1 / -1; }
+#scheduleForm .modern-input,
+#scheduleForm .modern-select-trigger { min-height: 40px; border-radius: 8px; }
+.schedule-status-fieldset { min-width: 0; margin: 0; padding: 1rem 0; border: 0; border-top: 1px solid var(--outline-variant); border-bottom: 1px solid var(--outline-variant); }
+.schedule-status-fieldset legend { float: none; width: auto; margin: 0 0 .6rem; padding: 0; }
+.schedule-status-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: .5rem; }
+.schedule-status-choice { display: flex; align-items: flex-start; gap: .5rem; margin: 0; padding: .7rem; border: 1px solid var(--outline-variant); border-radius: 9px; cursor: pointer; }
+.schedule-status-choice input { flex-shrink: 0; margin-top: .2rem; accent-color: var(--schedule-accent); }
+.schedule-status-choice strong,
+.schedule-status-choice small { display: block; }
+.schedule-status-choice strong { font-size: .85rem; }
+.schedule-status-choice small { margin-top: .2rem; color: var(--on-surface-variant); font-size: .7rem; line-height: 1.4; }
+.schedule-status-choice:has(input:checked) { border-color: var(--schedule-accent); background: color-mix(in srgb, var(--schedule-accent) 9%, var(--surface-container-lowest)); box-shadow: inset 0 0 0 1px var(--schedule-accent); }
+.schedule-status-choice:has(input:checked) strong { color: var(--schedule-accent); }
+.schedule-status-choice:has(input:focus-visible),
+#scheduleForm .schedule-tug-option:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 3px; }
+.schedule-assignment-summary { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
+.schedule-assigned-count { color: var(--schedule-teal); background: color-mix(in srgb, #14b8a6 10%, var(--surface-container-lowest)); padding: .4rem .65rem; border-radius: 20px; font-size: .8rem; }
+.schedule-assignment-summary > button { margin-left: auto; }
+#scheduleForm .schedule-selected-tugs:empty { display: none; }
+#scheduleForm .schedule-selected-tugs button { border-color: color-mix(in srgb, var(--schedule-teal) 35%, var(--outline-variant)); border-radius: 20px; background: color-mix(in srgb, #14b8a6 9%, var(--surface-container-lowest)); padding: .4rem .65rem; }
+#scheduleForm .schedule-selected-tugs button[data-state="conflict"] { border-color: #d97706; background: color-mix(in srgb, #f59e0b 10%, var(--surface-container-lowest)); }
+#scheduleForm .schedule-tug-picker { max-height: 340px; padding: .25rem; scrollbar-width: thin; overscroll-behavior: contain; }
+#scheduleForm .schedule-tug-option { border-radius: 10px; }
+#scheduleForm .schedule-tug-choice { padding: .75rem; gap: .65rem; border-radius: 9px; }
+#scheduleForm .schedule-tug-choice input { width: 17px; height: 17px; flex-shrink: 0; accent-color: var(--schedule-teal); }
+#scheduleForm .schedule-tug-name { font-size: .85rem; font-weight: 600; }
+#scheduleForm .schedule-tug-option:has(input:checked) { border-color: var(--schedule-teal); background: color-mix(in srgb, #14b8a6 7%, var(--surface-container-lowest)); }
+#scheduleForm .schedule-tug-choice:has(input:checked) { background: transparent; }
+#scheduleForm .schedule-tug-option[data-state="clear"] .schedule-tug-booking-state { color: var(--schedule-teal); background: color-mix(in srgb, #14b8a6 10%, var(--surface-container-lowest)); }
+#scheduleForm .schedule-tug-booking-state { padding: .25rem .45rem; border-radius: 6px; line-height: 1.3; }
+#scheduleForm .schedule-tug-option[data-state="conflict"] { border-color: #d97706; background: color-mix(in srgb, #f59e0b 7%, var(--surface-container-lowest)); }
+.schedule-save-guidance { padding-top: .75rem; border-top: 1px solid var(--outline-variant); font-size: .8rem; color: var(--on-surface-variant); }
+.schedule-save-guidance summary { cursor: pointer; }
+.schedule-form-actions { justify-content: flex-end; margin-top: 1rem; padding: .85rem 1rem; border: 1px solid var(--outline-variant); border-radius: 12px; background: var(--surface-container-lowest); }
+@media (max-width: 1000px) {
+    .schedule-form-layout {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 600px) {
+    .schedule-fields {
+        grid-template-columns: 1fr;
+    }
+    #scheduleForm .schedule-tug-booking-state {
+        margin-left: 1.7rem;
+    }
+    .schedule-assignment-summary > button {
+        margin-left: 0;
+    }
+    .schedule-form-actions > * {
+        flex: 1;
+        justify-content: center;
+    }
+}
+@media (pointer: coarse) {
+    #scheduleForm .modern-input,
+    #scheduleForm .modern-select-trigger {
+        min-height: 44px;
+    }
+}

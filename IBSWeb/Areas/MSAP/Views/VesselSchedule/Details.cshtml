@@ -24,7 +24,7 @@
                 <dt>Planned start</dt><dd>@Model.PlannedStart.ToString("MMM d, yyyy · HH:mm")</dd>
                 <dt>Planned end</dt><dd>@Model.PlannedEnd.ToString("MMM d, yyyy · HH:mm")</dd>
                 <dt>Duration</dt><dd>@((Model.PlannedEnd - Model.PlannedStart).TotalHours.ToString("0.##")) hours</dd>
-                <dt>Tug coverage</dt><dd>@tugs.Count assigned / @Model.RequiredTugCount required</dd>
+                <dt>Tugboats</dt><dd>@tugs.Count assigned</dd>
                 <dt>Assigned tugs</dt><dd>@(tugs.Count == 0 ? "Not assigned yet" : string.Join(", ", tugs))</dd>
                 <dt>Created</dt><dd>@Model.CreatedDate.ToString("MMM d, yyyy HH:mm") by @Model.CreatedBy</dd>
                 @if (Model.EditedDate.HasValue) { <dt>Last edited</dt><dd>@Model.EditedDate.Value.ToString("MMM d, yyyy HH:mm") by @Model.EditedBy</dd> }

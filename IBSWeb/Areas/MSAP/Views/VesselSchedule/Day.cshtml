@@ -10,7 +10,6 @@
         s => string.IsNullOrEmpty(s.AssignedTugboatIds) ? new List<int>() : JsonSerializer.Deserialize<List<int>>(s.AssignedTugboatIds) ?? []);
     var names = Model.Tugboats.ToDictionary(t => t.TugboatId, t => t.TugboatName);
     var bookedTugIds = active.SelectMany(s => assignments[s.VesselScheduleId]).ToHashSet();
-    var shortage = active.Count(s => s.Status != MsapConstants.VesselScheduleStatus.Completed && assignments[s.VesselScheduleId].Count < s.RequiredTugCount);
 }
 <link rel="stylesheet" href="~/msap/css/vessel-schedule.css" asp-append-version="true" />
 <div class="modern-layout">
@@ -48,7 +47,6 @@
             @if (conflictingIds.Count > 0) { <span class="schedule-conflict-legend"><span class="material-symbols-outlined">warning</span><strong>@conflictingIds.Count</strong> overlapping plans</span> }
             <span data-status="Confirmed"><strong>@active.Count(s => s.Status == MsapConstants.VesselScheduleStatus.Confirmed)</strong> confirmed</span>
             <span data-status="In Progress"><strong>@active.Count(s => s.Status == MsapConstants.VesselScheduleStatus.InProgress)</strong> in progress</span>
-            <span class="@(shortage > 0 ? "schedule-warning" : "")"><strong>@shortage</strong> need tug assignments</span>
         </div>
         <div class="schedule-daily-layout">
         <section class="schedule-agenda" aria-labelledby="agendaHeading">
@@ -90,8 +88,7 @@
                     <div class="schedule-agenda-metrics">
                         <div><span class="schedule-metric-label"><span class="material-symbols-outlined">location_on</span> Location</span><strong>@schedule.Port.PortName</strong><span>@schedule.Terminal.TerminalName</span></div>
                         <div><span class="schedule-metric-label"><span class="material-symbols-outlined">schedule</span> Planned window</span><strong>@schedule.PlannedStart.ToString("MMM d, HH:mm") <span aria-hidden="true">→</span> @schedule.PlannedEnd.ToString("MMM d, HH:mm")</strong></div>
-                        <div><span class="schedule-metric-label"><span class="material-symbols-outlined">directions_boat</span> Tug coverage</span><strong>@ids.Count assigned <span class="schedule-muted">/ @schedule.RequiredTugCount required</span></strong>
-                            @if (!closed && ids.Count < schedule.RequiredTugCount) { <span class="schedule-warning">@(schedule.RequiredTugCount - ids.Count) still needed</span> }
+                        <div><span class="schedule-metric-label"><span class="material-symbols-outlined">directions_boat</span> Tugboats</span><strong>@ids.Count assigned</strong>
                         </div>
                     </div>
                     @if (ids.Count > 0 || !string.IsNullOrWhiteSpace(schedule.Notes))

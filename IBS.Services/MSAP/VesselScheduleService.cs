@@ -64,7 +64,6 @@ namespace IBS.Services.MSAP
                 existing.TerminalId = model.TerminalId;
                 existing.PlannedStart = model.PlannedStart;
                 existing.PlannedEnd = model.PlannedEnd;
-                existing.RequiredTugCount = model.RequiredTugCount;
                 existing.AssignedTugboatIds = model.AssignedTugboatIds;
                 existing.VoyageNumber = model.VoyageNumber;
                 existing.VesselType = model.VesselType;
@@ -127,7 +126,6 @@ namespace IBS.Services.MSAP
             if (model.Status is not (MsapConstants.VesselScheduleStatus.Tentative or MsapConstants.VesselScheduleStatus.Confirmed
                 or MsapConstants.VesselScheduleStatus.InProgress or MsapConstants.VesselScheduleStatus.Completed or MsapConstants.VesselScheduleStatus.Cancelled))
                 return "Choose a valid schedule status.";
-            if (model.RequiredTugCount is < 1 or > 10) return "Required tug count must be between 1 and 10.";
             var vessel = await unitOfWork.Vessel.GetAsync(v => v.VesselId == model.VesselId, ct);
             if (vessel == null) return "Choose a valid vessel.";
             var terminal = await unitOfWork.Terminal.GetAsync(t => t.TerminalId == model.TerminalId && t.PortId == model.PortId, ct);
@@ -146,8 +144,10 @@ namespace IBS.Services.MSAP
             model.AssignedTugboatIds = tugIds.Count == 0 ? null : JsonSerializer.Serialize(tugIds);
             if (model.Status == MsapConstants.VesselScheduleStatus.Cancelled) return null;
             if ((model.Status is MsapConstants.VesselScheduleStatus.Confirmed or MsapConstants.VesselScheduleStatus.InProgress)
-                && tugIds.Count < model.RequiredTugCount)
-                return "Assign the required tugboats before confirming or starting the schedule. Use Tentative while planning.";
+                && tugIds.Count == 0)
+            {
+                return "Assign at least one tugboat before confirming or starting the schedule. Use Tentative while planning.";
+            }
             var conflicts = await CheckConflictsAsync(model, ct);
             if (conflicts.Count > 0 && !allowConflicts)
                 return "Overlapping plans: " + string.Join(" ", conflicts.Select(c => c.Message))

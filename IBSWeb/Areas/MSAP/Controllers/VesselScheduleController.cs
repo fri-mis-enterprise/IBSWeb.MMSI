@@ -283,7 +283,6 @@ namespace IBSWeb.Areas.MSAP.Controllers
                 TerminalId = vm.TerminalId,
                 PlannedStart = vm.PlannedStart,
                 PlannedEnd = vm.PlannedEnd,
-                RequiredTugCount = vm.RequiredTugCount,
                 AssignedTugboatIds = vm.SelectedTugboatIds?.Any() == true
                     ? JsonSerializer.Serialize(vm.SelectedTugboatIds)
                     : null,
@@ -307,7 +306,6 @@ namespace IBSWeb.Areas.MSAP.Controllers
                 TerminalId = entity.TerminalId,
                 PlannedStart = entity.PlannedStart,
                 PlannedEnd = entity.PlannedEnd,
-                RequiredTugCount = entity.RequiredTugCount,
                 SelectedTugboatIds = tugIds,
                 VoyageNumber = entity.VoyageNumber,
                 Status = entity.Status,
