@@ -90,9 +90,11 @@ namespace IBS.DataAccess.Data
         public DbSet<FilprideChartOfAccount> FilprideChartOfAccounts { get; set; }
         public DbSet<Product> Products { get; set; }
 
-        public DbSet<Tugboat> MsapTugboats { get; set; }
+        public DbSet<Tugboat> MmsiTugboats { get; set; }
 
-        public DbSet<TugboatOwner> MsapTugboatOwners { get; set; }
+        public DbSet<TugboatOwner> MmsiTugboatOwners { get; set; }
+
+        public DbSet<TugMaster> MmsiTugMasters { get; set; }
 
         #endregion --Master File Entities
 

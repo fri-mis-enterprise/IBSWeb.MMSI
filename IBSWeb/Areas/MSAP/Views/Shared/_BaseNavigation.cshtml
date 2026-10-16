@@ -1,0 +1,9 @@
+@if (User.Identity?.IsAuthenticated == true)
+{
+    <li class="mnav-item" role="none">
+        <a class="mnav-trigger" asp-area="MSAP" asp-controller="Home" asp-action="Index" role="menuitem">
+            <span class="material-symbols-outlined" aria-hidden="true">directions_boat</span>
+            <span>MSAP</span>
+        </a>
+    </li>
+}
