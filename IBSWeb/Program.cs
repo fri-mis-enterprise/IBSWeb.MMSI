@@ -9,6 +9,7 @@ using IBS.Services;
 using IBS.Services.Attributes;
 using IBS.Utility;
 using IBS.Utility.Helpers;
+using IBSWeb.MSAP;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -76,6 +77,7 @@ if (builder.Environment.IsDevelopment())
 
 // Repositories + DI
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddMsapModule(builder.Configuration);
 builder.Services.AddScoped<ProvisionalReceiptTaggingService>();
 builder.Services.AddScoped<CheckVoucherDocumentationService>();
 builder.Services.AddOptions<BrandingOptions>()
@@ -157,6 +159,7 @@ if (!app.Environment.IsDevelopment())
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 app.UseStaticFiles();
+await app.UseMsapModuleAsync();
 app.UseRouting();
 app.UseAuthentication();
 app.UseMiddleware<MaintenanceMiddleware>();
