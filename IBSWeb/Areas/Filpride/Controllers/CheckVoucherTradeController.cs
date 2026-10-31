@@ -431,6 +431,7 @@ namespace IBSWeb.Areas.Filpride.Controllers
 
             viewModel.Suppliers = await _unitOfWork.GetFilprideTradeSupplierListAsyncById(cancellationToken);
             viewModel.BankAccounts = await _unitOfWork.GetFilprideBankAccountListById(cancellationToken);
+            viewModel.COA = await GetTradeAccountingEntryOptionsAsync(cancellationToken);
             viewModel.PONo = (await _unitOfWork.FilpridePurchaseOrder
                     .GetAllAsync(
                         po => po.SupplierId == viewModel.SupplierId &&
@@ -513,24 +514,18 @@ namespace IBSWeb.Areas.Filpride.Controllers
 
                 #endregion --Check if duplicate record
 
-                #region -- Get PO --
-
-                var getPurchaseOrder = await _unitOfWork.FilpridePurchaseOrder
-                    .GetAsync(po => viewModel.POSeries!.Contains(po.PurchaseOrderNo), cancellationToken);
-
-                if (getPurchaseOrder == null)
+                var rrTotalAmount = viewModel.RRs is { Count: > 0 }
+                    ? viewModel.RRs.Sum(rr => rr.Amount)
+                    : viewModel.DefaultPayableAmount;
+                if (rrTotalAmount <= 0m || rrTotalAmount != RoundToFour(rrTotalAmount))
                 {
                     return NotFound();
                 }
-
-                #endregion -- Get PO --
-
-                var rrTotalAmount = viewModel.RRs?.Sum(rr => rr.Amount) ?? 0m;
                 var appliedAdvanceAmount = Math.Max(0m, viewModel.AppliedAdvanceAmount);
 
                 if (appliedAdvanceAmount > rrTotalAmount)
                 {
-                    ModelState.AddModelError(nameof(viewModel.AppliedAdvanceAmount), "Applied advance amount cannot exceed the total selected RR amount.");
+                    ModelState.AddModelError(nameof(viewModel.AppliedAdvanceAmount), "Applied advance amount cannot exceed the payment amount.");
                     TempData["warning"] = "The information provided was invalid.";
                     return View(viewModel);
                 }
@@ -573,7 +568,8 @@ namespace IBSWeb.Areas.Filpride.Controllers
 
                 if (supplier == null)
                 {
-                    return NotFound();
+                    ModelState.AddModelError(nameof(viewModel.DefaultPayableAmount), "Payment amount must be positive and have at most four decimal places.");
+                    return View(viewModel);
                 }
 
                 #endregion -- Get Supplier
@@ -765,15 +761,44 @@ namespace IBSWeb.Areas.Filpride.Controllers
                 if (apTradeDetail != null)
                 {
                     var displayAppliedAdvanceAmount = Math.Max(0m, appliedAdvanceAmount);
-                    var baseAmount = displayAmounts.BaseAmount;
-                    var inputVat = displayAmounts.InputVat;
+                    var baseAmount = viewModel.DefaultPayableAmount;
+                    var isVatable = supplier.VatType == SD.VatType_Vatable;
+                    var isTaxable = supplier.TaxType == SD.TaxType_WithTax;
+                    var netOfVat = isVatable ? DecimalRoundingHelper.ComputeNetOfVat(baseAmount) : baseAmount;
+                    var inputVat = isVatable ? DecimalRoundingHelper.ComputeVatAmount(netOfVat) : 0;
+                    var ewt = isTaxable
+                        ? DecimalRoundingHelper.ComputeEwtAmount(netOfVat, supplier.WithholdingTaxPercent!.Value)
+                        : 0;
+                    var netOfEwt =
+                        DecimalRoundingHelper.ComputeNetOfEwt(baseAmount, ewt);
+
+                    cashInBank = netOfEwt - appliedAdvanceAmount;
+
+                    for (var i = 0; i < viewModel.AccountNumber.Length; i++)
+                    {
+                        var account = viewModel.AccountNumber[i];
+
+                        if (account == _apTradePayableAccountNo
+                            || account == _cashInBankAccountNo
+                            || account == _advancesToSupplierAccountNo)
+                        {
+                            continue;
+                        }
+
+                        cashInBank -= viewModel.Credit[i] - viewModel.Debit[i];
+                    }
+
+                    if (cashInBank < 0m)
+                    {
+                        throw new ArgumentException("Credits exceed the net payable.");
+                    }
 
                     cvDetails.Add(
                     new FilprideCheckVoucherDetail
                     {
                         AccountNo = apTradeDetail.AccountNo,
                         AccountName = apTradeDetail.AccountName,
-                        Debit = baseAmount,
+                        Debit = netOfVat,
                         Credit = 0.00m,
                         TransactionNo = cvh.CheckVoucherHeaderNo,
                         CheckVoucherHeaderId = cvh.CheckVoucherHeaderId,
@@ -798,26 +823,45 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         });
                     }
 
-                    foreach (var withholding in displayAmounts.WithholdingByAccount)
+                    // foreach (var withholding in displayAmounts.WithholdingByAccount)
+                    // {
+                    //     var withholdingTaxAccountNo = withholding.Key;
+                    //     var getWithholdingTaxTitle = await _dbContext.FilprideChartOfAccounts
+                    //         .FirstOrDefaultAsync(x => x.AccountNumber == withholdingTaxAccountNo, cancellationToken)
+                    //         ?? throw new ArgumentException($"Account title '{withholdingTaxAccountNo}' not found.");
+                    //     cvDetails.Add(
+                    //     new FilprideCheckVoucherDetail
+                    //     {
+                    //         AccountNo = getWithholdingTaxTitle.AccountNumber!,
+                    //         AccountName = getWithholdingTaxTitle.AccountName,
+                    //         Debit = 0.00m,
+                    //         Credit = withholding.Value,
+                    //         TransactionNo = cvh.CheckVoucherHeaderNo,
+                    //         CheckVoucherHeaderId = cvh.CheckVoucherHeaderId,
+                    //         IsDisplayEntry = true
+                    //     });
+                    // }
+                    if (isTaxable)
                     {
-                        var withholdingTaxAccountNo = withholding.Key;
+                        var withholdingTaxAccountNo = supplier.WithholdingTaxTitle!.Split(" ", 2);
                         var getWithholdingTaxTitle = await _dbContext.FilprideChartOfAccounts
-                            .FirstOrDefaultAsync(x => x.AccountNumber == withholdingTaxAccountNo, cancellationToken)
-                            ?? throw new ArgumentException($"Account title '{withholdingTaxAccountNo}' not found.");
+                                                         .FirstOrDefaultAsync(x => x.AccountNumber == withholdingTaxAccountNo[0], cancellationToken)
+                                                     ?? throw new ArgumentException($"Account title '{withholdingTaxAccountNo}' not found.");
                         cvDetails.Add(
-                        new FilprideCheckVoucherDetail
-                        {
-                            AccountNo = getWithholdingTaxTitle.AccountNumber!,
-                            AccountName = getWithholdingTaxTitle.AccountName,
-                            Debit = 0.00m,
-                            Credit = withholding.Value,
-                            TransactionNo = cvh.CheckVoucherHeaderNo,
-                            CheckVoucherHeaderId = cvh.CheckVoucherHeaderId,
-                            IsDisplayEntry = true
-                        });
+                            new FilprideCheckVoucherDetail
+                            {
+                                AccountNo = getWithholdingTaxTitle.AccountNumber!,
+                                AccountName = getWithholdingTaxTitle.AccountName,
+                                Debit = 0.00m,
+                                Credit = ewt,
+                                TransactionNo = cvh.CheckVoucherHeaderNo,
+                                CheckVoucherHeaderId = cvh.CheckVoucherHeaderId,
+                                IsDisplayEntry = true
+                            });
                     }
 
                     var displayCashInBankAmount = RoundToFour(cashInBank);
+                    cvh.CheckAmount = displayCashInBankAmount;
 
                     cvDetails.Add(
                     new FilprideCheckVoucherDetail
@@ -1217,12 +1261,14 @@ namespace IBSWeb.Areas.Filpride.Controllers
                 }
 
                 #endregion -- Get bank account
-                var rrTotalAmount = viewModel.RRs?.Sum(rr => rr.Amount) ?? 0m;
+                var rrTotalAmount = viewModel.RRs is { Count: > 0 }
+                    ? viewModel.RRs.Sum(rr => rr.Amount)
+                    : viewModel.DefaultPayableAmount;
                 var appliedAdvanceAmount = Math.Max(0m, viewModel.AppliedAdvanceAmount);
 
                 if (appliedAdvanceAmount > rrTotalAmount)
                 {
-                    ModelState.AddModelError(nameof(viewModel.AppliedAdvanceAmount), "Applied advance amount cannot exceed the total selected RR amount.");
+                    ModelState.AddModelError(nameof(viewModel.AppliedAdvanceAmount), "Applied advance amount cannot exceed the payment amount.");
                     TempData["warning"] = "The information provided was invalid.";
                     return View(viewModel);
                 }
@@ -1449,8 +1495,37 @@ namespace IBSWeb.Areas.Filpride.Controllers
                 if (apTradeDetail != null)
                 {
                     var displayAppliedAdvanceAmount = Math.Max(0m, appliedAdvanceAmount);
-                    var baseAmount = displayAmounts.BaseAmount;
-                    var inputVat = displayAmounts.InputVat;
+                    var baseAmount = viewModel.DefaultPayableAmount;
+                    var isVatable = supplier.VatType == SD.VatType_Vatable;
+                    var isTaxable = supplier.TaxType == SD.TaxType_WithTax;
+                    var netOfVat = isVatable ? DecimalRoundingHelper.ComputeNetOfVat(baseAmount) : baseAmount;
+                    var inputVat = isVatable ? DecimalRoundingHelper.ComputeVatAmount(netOfVat) : 0;
+                    var ewt = isTaxable
+                        ? DecimalRoundingHelper.ComputeEwtAmount(netOfVat, supplier.WithholdingTaxPercent!.Value)
+                        : 0;
+                    var netOfEwt =
+                        DecimalRoundingHelper.ComputeNetOfEwt(baseAmount, ewt);
+
+                    cashInBank = netOfEwt - appliedAdvanceAmount;
+
+                    for (var i = 0; i < viewModel.AccountNumber.Length; i++)
+                    {
+                        var account = viewModel.AccountNumber[i];
+
+                        if (account == _apTradePayableAccountNo
+                            || account == _cashInBankAccountNo
+                            || account == _advancesToSupplierAccountNo)
+                        {
+                            continue;
+                        }
+
+                        cashInBank -= viewModel.Credit[i] - viewModel.Debit[i];
+                    }
+
+                    if (cashInBank < 0m)
+                    {
+                        throw new ArgumentException("Credits exceed the net payable.");
+                    }
 
                     if (existingHeaderModel.CheckVoucherHeaderNo != null)
                     {
@@ -1459,7 +1534,7 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         {
                             AccountNo = apTradeDetail.AccountNo,
                             AccountName = apTradeDetail.AccountName,
-                            Debit = baseAmount,
+                            Debit = netOfVat,
                             Credit = 0.00m,
                             TransactionNo = existingHeaderModel.CheckVoucherHeaderNo,
                             CheckVoucherHeaderId = existingHeaderModel.CheckVoucherHeaderId,
@@ -1484,9 +1559,9 @@ namespace IBSWeb.Areas.Filpride.Controllers
                             });
                         }
 
-                        foreach (var withholding in displayAmounts.WithholdingByAccount)
+                        if (isTaxable)
                         {
-                            var withholdingTaxAccountNo = withholding.Key;
+                            var withholdingTaxAccountNo = supplier.WithholdingTaxTitle!.Split(" ", 2)[0];
                             var getWithholdingTaxTitle = await _dbContext.FilprideChartOfAccounts
                                 .FirstOrDefaultAsync(x => x.AccountNumber == withholdingTaxAccountNo, cancellationToken)
                                 ?? throw new ArgumentException($"Account title '{withholdingTaxAccountNo}' not found.");
@@ -1496,7 +1571,7 @@ namespace IBSWeb.Areas.Filpride.Controllers
                                 AccountNo = getWithholdingTaxTitle.AccountNumber!,
                                 AccountName = getWithholdingTaxTitle.AccountName,
                                 Debit = 0.00m,
-                                Credit = withholding.Value,
+                                Credit = ewt,
                                 TransactionNo = existingHeaderModel.CheckVoucherHeaderNo,
                                 CheckVoucherHeaderId = existingHeaderModel.CheckVoucherHeaderId,
                                 IsDisplayEntry = true
@@ -1504,6 +1579,7 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         }
 
                         var displayCashInBankAmount = RoundToFour(cashInBank);
+                        existingHeaderModel.CheckAmount = displayCashInBankAmount;
 
                         details.Add(
                         new FilprideCheckVoucherDetail

@@ -24,5 +24,7 @@ namespace IBS.Models.Filpride.ViewModels
 
         public int? SupplierMasterFileId { get; set; }
 
+        public int? TugboatMasterFileId { get; set; }
+
     }
 }

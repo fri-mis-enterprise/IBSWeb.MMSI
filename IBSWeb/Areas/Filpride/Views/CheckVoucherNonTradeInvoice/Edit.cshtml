@@ -114,6 +114,7 @@
                                             <input type="hidden" name="AccountingEntries[@i].CompanyMasterFileId" value="@Model.AccountingEntries[i].CompanyMasterFileId" class="company-master-file-id" />
                                             <input type="hidden" name="AccountingEntries[@i].CustomerMasterFileId" value="@Model.AccountingEntries[i].CustomerMasterFileId" class="customer-master-file-id" />
                                             <input type="hidden" name="AccountingEntries[@i].SupplierMasterFileId" value="@Model.AccountingEntries[i].SupplierMasterFileId" class="supplier-master-file-id" />
+                                            <input type="hidden" name="AccountingEntries[@i].TugboatMasterFileId" value="@Model.AccountingEntries[i].TugboatMasterFileId" class="tugboat-master-file-id" />
                                         </td>
                                         <td>
                                             <input type="number" name="AccountingEntries[@i].Amount" value="@Model.AccountingEntries[i].Amount" class="form-control form-control-sm text-end amount" />
@@ -443,6 +444,7 @@
                     <input type="hidden" name="AccountingEntries[${rowCount}].CompanyMasterFileId" class="company-master-file-id" />
                     <input type="hidden" name="AccountingEntries[${rowCount}].CustomerMasterFileId" class="customer-master-file-id" />
                     <input type="hidden" name="AccountingEntries[${rowCount}].SupplierMasterFileId" class="supplier-master-file-id" />
+                    <input type="hidden" name="AccountingEntries[${rowCount}].TugboatMasterFileId" class="tugboat-master-file-id" />
                 </td>
                 <td class="px-2">
                     <input type="number" name="AccountingEntries[${rowCount}].Amount" class="form-control form-control-sm text-end amount" value="0" />
@@ -520,7 +522,7 @@
                         accountSelect.find('option:selected').text(originalText);
                     }
 
-                    row.find('input[name$=".BankMasterFileId"], input[name$=".CompanyMasterFileId"], input[name$=".CustomerMasterFileId"], input[name$=".SupplierMasterFileId"]').remove();
+                    row.find('input[name$=".BankMasterFileId"], input[name$=".CompanyMasterFileId"], input[name$=".CustomerMasterFileId"], input[name$=".SupplierMasterFileId"], input[name$=".TugboatMasterFileId"]').remove();
                     accountSelect.removeData('original-text').trigger('change.select2');
                 });
             }
@@ -666,6 +668,7 @@
                 getCompanies: '@Url.Action("GetCompanies", "CheckVoucherNonTradeInvoice", new { area = "Filpride" })',
                 getCustomers: '@Url.Action("GetCustomers", "CheckVoucherNonTradeInvoice", new { area = "Filpride" })',
                 getSuppliers: '@Url.Action("GetSuppliers", "CheckVoucherNonTradeInvoice", new { area = "Filpride" })',
+                getTugboats: '@Url.Action("GetTugboat", "CheckVoucherNonTradeInvoice", new { area = "Filpride" })',
             });
 
             // Handle selection button clicks
@@ -695,14 +698,16 @@
                 { selector: '.bank-master-file-id', collection: 'bankAccounts', parameter: 'bankIds' },
                 { selector: '.company-master-file-id', collection: 'companies', parameter: 'companyIds' },
                 { selector: '.customer-master-file-id', collection: 'customers', parameter: 'customerIds' },
-                { selector: '.supplier-master-file-id', collection: 'suppliers', parameter: 'supplierIds' }
+                { selector: '.supplier-master-file-id', collection: 'suppliers', parameter: 'supplierIds' },
+                { selector: '.tugboat-master-file-id', collection: 'tugboats', parameter: 'tugboatIds' }
             ];
             const requests = [];
             const requestData = {
                 bankIds: [],
                 companyIds: [],
                 customerIds: [],
-                supplierIds: []
+                supplierIds: [],
+                tugboatIds: []
             };
 
             document.querySelectorAll('#accountTable tbody tr').forEach(row => {

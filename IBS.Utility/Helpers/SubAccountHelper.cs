@@ -8,7 +8,8 @@ namespace IBS.Utility.Helpers
             int? customerId,
             int? supplierId,
             int? bankId,
-            int? companyId)
+            int? companyId,
+            int? tugboatId)
         {
             if (customerId.HasValue)
             {
@@ -28,6 +29,11 @@ namespace IBS.Utility.Helpers
             if (companyId.HasValue)
             {
                 return (SubAccountType.Company, companyId.Value);
+            }
+
+            if (tugboatId.HasValue)
+            {
+                return (SubAccountType.Tugboat, tugboatId.Value);
             }
 
             return (null, null);

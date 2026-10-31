@@ -1,24 +1,24 @@
 using System.Linq.Dynamic.Core;
 using System.Security.Claims;
-using IBS.DTOs;
 using IBS.DataAccess.Data;
 using IBS.DataAccess.Repository.IRepository;
+using IBS.DTOs;
+using IBS.Models;
 using IBS.Models.Enums;
 using IBS.Models.Filpride.AccountsPayable;
 using IBS.Models.Filpride.Books;
 using IBS.Models.Filpride.MasterFile;
 using IBS.Models.Filpride.ViewModels;
 using IBS.Models.MasterFile;
-using IBS.Models;
 using IBS.Services;
 using IBS.Utility.Constants;
 using IBS.Utility.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace IBSWeb.Areas.Filpride.Controllers
 {
@@ -378,7 +378,8 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         accountEntry.CustomerMasterFileId,
                         accountEntry.SupplierMasterFileId,
                         accountEntry.BankMasterFileId,
-                        accountEntry.CompanyMasterFileId
+                        accountEntry.CompanyMasterFileId,
+                        accountEntry.TugboatMasterFileId
                     );
 
                     string? subAccountName = null;
@@ -394,6 +395,10 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         if (subAccountInfo != null)
                         {
                             subAccountName = subAccountInfo.Name;
+                        }
+                        else if (subAccountType == SubAccountType.Tugboat)
+                        {
+                            throw new InvalidOperationException("The selected company-owned tugboat was not found.");
                         }
                     }
 
@@ -827,6 +832,9 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         SupplierMasterFileId = details.SubAccountType == SubAccountType.Supplier
                             ? details.SubAccountId
                             : null,
+                        TugboatMasterFileId = details.SubAccountType == SubAccountType.Tugboat
+                            ? details.SubAccountId
+                            : null,
                     });
                 }
 
@@ -971,7 +979,8 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         accountEntry.CustomerMasterFileId,
                         accountEntry.SupplierMasterFileId,
                         accountEntry.BankMasterFileId,
-                        accountEntry.CompanyMasterFileId
+                        accountEntry.CompanyMasterFileId,
+                        accountEntry.TugboatMasterFileId
                     );
 
                     string? subAccountName = null;
@@ -987,6 +996,10 @@ namespace IBSWeb.Areas.Filpride.Controllers
                         if (subAccountInfo != null)
                         {
                             subAccountName = subAccountInfo.Name;
+                        }
+                        else if (subAccountType == SubAccountType.Tugboat)
+                        {
+                            throw new InvalidOperationException("The selected company-owned tugboat was not found.");
                         }
                     }
 
@@ -1644,12 +1657,13 @@ namespace IBSWeb.Areas.Filpride.Controllers
         [HttpGet]
         [Authorize(Policy = nameof(CheckVoucherNonTradeInvoice.CheckVoucherNonTradeInvoiceEdit))]
         public async Task<IActionResult> GetMasterFileDetails(int[]? bankIds, int[]? companyIds,
-            int[]? customerIds, int[]? supplierIds, CancellationToken cancellationToken)
+            int[]? customerIds, int[]? supplierIds, int[]? tugboatIds, CancellationToken cancellationToken)
         {
             bankIds = bankIds?.Distinct().ToArray() ?? [];
             companyIds = companyIds?.Distinct().ToArray() ?? [];
             customerIds = customerIds?.Distinct().ToArray() ?? [];
             supplierIds = supplierIds?.Distinct().ToArray() ?? [];
+            tugboatIds = tugboatIds?.Distinct().ToArray() ?? [];
 
             Dictionary<int, string> bankAccounts = bankIds.Length == 0
                 ? []
@@ -1679,8 +1693,15 @@ namespace IBSWeb.Areas.Filpride.Controllers
                     .Where(supplier => supplierIds.Contains(supplier.SupplierId))
                     .ToDictionaryAsync(supplier => supplier.SupplierId,
                         supplier => $"{supplier.SupplierCode} - {supplier.SupplierName}", cancellationToken);
+            Dictionary<int, string> tugboats = tugboatIds.Length == 0
+                ? []
+                : await _dbContext.MmsiTugboats
+                    .AsNoTracking()
+                    .Where(tugboat => tugboatIds.Contains(tugboat.TugboatId) && tugboat.IsCompanyOwned)
+                    .ToDictionaryAsync(tugboat => tugboat.TugboatId,
+                        tugboat => $"{tugboat.TugboatNumber} - {tugboat.TugboatName}", cancellationToken);
 
-            return Json(new { bankAccounts, companies, customers, suppliers });
+            return Json(new { bankAccounts, companies, customers, suppliers, tugboats });
         }
 
         [HttpGet]
@@ -1781,6 +1802,22 @@ namespace IBSWeb.Areas.Filpride.Controllers
                 accountName = c.SupplierName,
                 accountNumber = c.SupplierCode
             }));
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetTugboat(CancellationToken cancellationToken)
+        {
+            return Json(await _dbContext.MmsiTugboats
+                .AsNoTracking()
+                .Where(t => t.IsCompanyOwned)
+                .OrderBy(t => t.TugboatNumber)
+                .Select(t => new
+                {
+                    id = t.TugboatId,
+                    accountName = t.TugboatName,
+                    accountNumber = t.TugboatNumber
+                })
+                .ToListAsync(cancellationToken));
         }
 
         [HttpGet]
